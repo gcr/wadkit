@@ -1,0 +1,23 @@
+{
+  "name": "wadkit",
+  "version": "0.0.1",
+  "description": "Javascript editor for WAD files",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "node_modules/.bin/browserify -t browserify-livescript src/wad-parser.ls -o bundle.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "jParser": "^1.0.2",
+    "jparser": "0.0.2",
+    "jszip": "^3.2.2",
+    "livescript": "^1.6.0"
+  },
+  "devDependencies": {
+    "browserify": "^16.5.0",
+    "browserify-livescript": "^0.2.4",
+    "watchify": "^3.11.1"
+  }
+}
