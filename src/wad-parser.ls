@@ -1,5 +1,6 @@
 require! 'jParser'
-#require! 'jszip'
+require! 'jszip'
+require! 'path'
 
 WAD-SPEC = (data) ->
   string8: -> @parse ['string', 8] .replace /\0+$/g, ''
@@ -73,11 +74,21 @@ export parse-wad = (data) ->
   new Promise (resolve, reject) ->
     resolve(new jParser(data, WAD-SPEC(data)).parse 'file')
 
-export read-map = (wad, name)-> new Promise (resolve, reject) ->
-  if not name.starts-with "MAP"
+export parse-pk3 = (data, cb) -> new Promise (resolve, reject)->
+  ## Returns a mapping from entries of the pk3 to node buffer objects.
+  zip <- jszip.load-async data, checkCRC32: true .then
+  zip-entries = {}
+  promises = []
+  zip.for-each (path, file)->
+    promises.push(file.async "nodebuffer" .then (buf)-> zip-entries[path] = buf)
+  <- Promise.all promises .then
+  resolve zip-entries
+
+export wad-read-map = (wad, mapname)-> new Promise (resolve, reject) ->
+  if not mapname.starts-with "MAP"
     reject "Map name must begin with MAP: '#name'"
   for i til wad.lumps.length
-    if wad.lumps[i].name == name
+    if wad.lumps[i].name == mapname
       required = ["SECTORS", "VERTEXES", "THINGS", "LINEDEFS", "SIDEDEFS"]
       map = {}
       for lump in wad.lumps.slice i+1, i+12
@@ -93,18 +104,32 @@ export read-map = (wad, name)-> new Promise (resolve, reject) ->
           return reject "Map does not have required lump: '#lumpname'"
 
       return resolve map
-  reject "Map #name does not exist"
+  reject "Map #mapname does not exist"
+
+export pk3-read-map = (zip, mapname)-> new Promise (resolve, reject)->
+  for pathname, buf of zip
+    if path.parse(pathname).name == mapname
+      return parse-wad buf .then (wad)->
+        return resolve wad-read-map wad, mapname
+  reject "Map #mapname not found"
 
 
 
-
-require! 'fs'
+#require! 'fs'
 #err, data <- fs.read-file '/Users/kimmy/srb2kart/DOWNLOAD/KL_InfiniteLaps-v1.wad'
 #err, data <- fs.read-file '/Users/kimmy/srb2-mods/assets/srb2.srb'
-err, data <- fs.read-file '/Users/kimmy/wadkit/Maps/MAPM8.wad'
-if err
-  console.log err
-else
-  wad <- parse-wad data .then
-  map <- read-map wad, "MAPM8" .then
-  console.log map
+
+## WAD test
+#err, data <- fs.read-file '/Users/kimmy/wadkit/Maps/MAPM8.wad'
+#if err
+#  console.log err
+#else
+#  wad <- parse-wad data .then
+#  map <- wad-read-map wad, "MAPM8" .then
+#  console.log map
+
+## PK3 test
+#err, data <- fs.read-file '/Users/kimmy/srb2-mods/assets/zones.pk3'
+#zip <- parse-pk3 data .then
+#map <- pk3-read-map zip, "MAPM8" .then
+#console.log map
