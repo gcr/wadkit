@@ -43,6 +43,7 @@ model = new map-model.MapModel map
 console.time-end "map model"
 
 map3d = new m3d.Map3dObj model
+scene.add map3d.mesh
 
 window.model = model
 window.map3d = map3d
@@ -53,15 +54,15 @@ window.map3d = map3d
 #console.log counts
 
 #scene.add model.obj
-console.time "create geometry"
+#console.time "create geometry"
 #scene.add map3d.sector-to-mesh model.sectors[89]
 #scene.add map3d.sector-to-mesh model.sectors[0]
-for sector,i in model.sectors
-    try
-        scene.add map3d.sector-to-mesh sector
-    catch e
-        console.log e
-console.time-end "create geometry"
+#for sector,i in model.sectors
+#    try
+#        scene.add map3d.sector-to-mesh sector
+#    catch e
+#        console.log e
+#console.time-end "create geometry"
 
 ##model.obj.scale = THREE.Vector3 0.01,0.01,0.01
 #console.log model.obj

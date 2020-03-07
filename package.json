@@ -17,6 +17,7 @@
     "jszip": "^3.2.2",
     "livescript": "^1.6.0",
     "three": "^0.114.0",
+    "three-buffer-geometry-utils": "git+https://github.com/ivee-tech/three-buffer-geometry-utils.git",
     "three-orbit-controls": "^82.1.0"
   },
   "devDependencies": {
