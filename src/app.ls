@@ -1,11 +1,19 @@
 THREE = require 'three'
+require! './wad-parser.ls'
+tex3d = require './tex-3d.ls'
+require! 'fs'
+
+fetch-remote-file = (url) ->>
+    response = await fetch url
+    buf = await response.arrayBuffer()
+    return buf
 
 m3d = require './map-3d.ls'
 
 # Make renderer
 scene = new THREE.Scene()
 camera = new THREE.PerspectiveCamera( 90, window.innerWidth / window.innerHeight, 0.1, 1000 )
-renderer = new THREE.WebGLRenderer()
+renderer = new THREE.WebGLRenderer(antialias: true)
 renderer.setSize( window.innerWidth, window.innerHeight )
 document.body.appendChild( renderer.domElement )
 
@@ -26,47 +34,34 @@ animate = ->
   renderer.render scene, camera
 animate!
 
-require! 'fs'
+MAP = "MAP01"
 
-content = fs.readFileSync("Maps/MAP07.wad") #;)
-
-require! './wad-parser.ls'
+buf <- fetch-remote-file "assets/#{MAP}.wad" .then
 console.time "parse WAD"
-wad <- wad-parser.wad-parse content .then
+wad <- wad-parser.wad-parse buf .then
 console.time-end "parse WAD"
 console.time "read wad info"
-map <- wad-parser.wad-read-map wad, "MAP07" .then
+map <- wad-parser.wad-read-map wad, MAP .then
 console.time-end "read wad info"
+
 require! './map-model.ls'
 console.time "map model"
 model = new map-model.MapModel map
 console.time-end "map model"
 
-map3d = new m3d.Map3dObj model
-scene.add map3d.mesh
+# Load textures
+buf <- fetch-remote-file "assets/gfx.wad" .then
+gfx-wad <- wad-parser.wad-parse buf .then
+tex-man = new tex3d.TextureManager!
+tex-man.ingest-wad gfx-wad
 
+# Construct geometry
+console.time 'map3d'
+map3d = new m3d.Map3dObj model, tex-man
+console.time-end 'map3d'
+
+scene.add map3d.mesh
 window.model = model
 window.map3d = map3d
-
-#counts = {}
-#for s in model.sectors
-#  counts[s.linedefs.length] = 1 + (counts[s.linedefs.length] or 0)
-#console.log counts
-
-#scene.add model.obj
-#console.time "create geometry"
-#scene.add map3d.sector-to-mesh model.sectors[89]
-#scene.add map3d.sector-to-mesh model.sectors[0]
-#for sector,i in model.sectors
-#    try
-#        scene.add map3d.sector-to-mesh sector
-#    catch e
-#        console.log e
-#console.time-end "create geometry"
-
-##model.obj.scale = THREE.Vector3 0.01,0.01,0.01
-#console.log model.obj
-#
 OrbitControls = require('three-orbit-controls')(THREE)
-
 new OrbitControls(camera, renderer.domElement)

@@ -2,7 +2,7 @@ require! 'jParser'
 require! 'jszip'
 require! 'path'
 
-WAD-SPEC = (data) ->
+export WAD-SPEC = (data) ->
   # fixed-length 8 byte string padded with \x00, which we discard ;)
   string8: -> @parse ['string', 8] .replace /\0+$/g, ''
 
@@ -30,7 +30,7 @@ WAD-SPEC = (data) ->
      data: ->
        c = @current
        # data is a buffer
-       if c.name in ['THINGS', 'LINEDEFS', 'VERTEXES', 'SECTORS', 'SIDEDEFS']
+       if c.name in ['THINGS', 'LINEDEFS', 'VERTEXES', 'SECTORS', 'SIDEDEFS', 'PLAYPAL']
          @seek c.offset, -> @parse [c.name, c.size]
        else
          data.slice c.offset, c.offset+c.size
@@ -96,6 +96,30 @@ WAD-SPEC = (data) ->
   SECTORS: (length) -> @parse ['array', 'SECTORrecord', length/26]
 
 
+  # Graphics formats
+  PLAYPAL:
+    data: ['array' 'uint8' 256*3*14]
+  # PICTURE is used for sprites and textures.
+  PICTURE:
+    width: 'uint16'
+    height: 'uint16'
+    left-offset: 'int16'
+    top-offset: 'int16'
+    data: ->
+      # from the unofficial DOOM specification 1.666
+      offset = @tell! - 8
+      data = new Uint8Array(@current.width * @current.height)
+      data.fill 255
+      for ptr, col in @parse ['array', 'uint32', @current.width]
+        @seek ptr - offset, ->
+          while (row = @parse 'uint8') != 0xff
+            n-pixels = @parse 'uint8'
+            pixdata = @parse ['array', 'uint8', n-pixels + 2]
+            pixdata = pixdata[1 til -1] # slice off the top
+            for x,i in pixdata
+              data[(row + i)*@current.width  + col] = x
+      return data
+
 # wad-parse :: Buffer -> Promise of JSON array
 export wad-parse = (data) ->
   new Promise (resolve, reject) ->
@@ -158,7 +182,16 @@ export pk3-read-map = (zip, mapname)-> new Promise (resolve, reject)->
         return resolve wad-read-map wad, mapname
   reject "Map #mapname not found"
 
-
+export lump-to-image-data = (data, palette) ->
+    lump = new jParser(data, WAD-SPEC(data)).parse 'PICTURE'
+    image-data = new ImageData lump.width, lump.height
+    for x,i in lump.data
+      if x != 255
+        image-data.data[4*i + 0] = palette.data[3*x + 0]
+        image-data.data[4*i + 1] = palette.data[3*x + 1]
+        image-data.data[4*i + 2] = palette.data[3*x + 2]
+        image-data.data[4*i + 3] = 255
+    return image-data
 
 #require! 'fs'
 #err, data <- fs.read-file '/Users/kimmy/srb2kart/DOWNLOAD/KL_InfiniteLaps-v1.wad'
@@ -177,8 +210,12 @@ export pk3-read-map = (zip, mapname)-> new Promise (resolve, reject)->
 #
 ### PK3 test
 #require! 'fs'
-#err, data <- fs.read-file '/Users/kimmy/srb2-mods/assets/zones.pk3'
-#zip <- pk3-parse data .then
+#err, data <- fs.read-file '/Users/kimmy/srb2-mods/assets/srb2.srb'
+#wad <- wad-parse data .then
+#for lump in wad.lumps
+#    if lump.name == "STLIVEX"
+#      console.log(new jParser(lump.data, WAD-SPEC!).parse 'PICTURE')
+
 #map <- pk3-read-map zip, "MAP04" .then
 #console.log map
 #console.log do
