@@ -34,7 +34,7 @@ animate = ->
   renderer.render scene, camera
 animate!
 
-MAP = "MAP01"
+MAP = "MAP04"
 
 buf <- fetch-remote-file "assets/#{MAP}.wad" .then
 console.time "parse WAD"
@@ -50,10 +50,15 @@ model = new map-model.MapModel map
 console.time-end "map model"
 
 # Load textures
-buf <- fetch-remote-file "assets/gfx.wad" .then
-gfx-wad <- wad-parser.wad-parse buf .then
+console.time 'pk3-parse'
+buf <- fetch-remote-file "assets/srb2-2.2.pk3" .then
+gfx-wad <- wad-parser.pk3-parse buf .then
 tex-man = new tex3d.TextureManager!
-tex-man.ingest-wad gfx-wad
+console.time-end 'pk3-parse'
+<- tex-man.ingest-pk3 gfx-wad .then
+
+#console.log "GFZWALL:", tex-man.get 'GFZWALL'
+#tex-man.get-shader-material!
 
 # Construct geometry
 console.time 'map3d'

@@ -9,19 +9,17 @@ export class Map3dObj
     geometries = []
     for sector in @model.sectors
       for geo in @sector-to-geometry sector
-        #geometries.push geo
-        35
+        geometries.push geo
     for linedef in @model.linedefs
       for geo in @linedef-to-geometry linedef
         geometries.push geo
 
     geo = BufferGeometryUtils.merge-buffer-geometries geometries, 0
+    @tex-manager.fix-tex-bounds geo
     console.log geo
     mesh = new THREE.Mesh geo, @tex-manager.get-shader-material!
     # Add wireframe view
     wires-geo = new THREE.EdgesGeometry geo, 25
-    m = new THREE.Matrix4!.make-translation 0,0, 0.5
-    wires-geo.apply-matrix4 m
     wires-mat = new THREE.LineBasicMaterial do
         color:0xffffff
         linewidth: 4
@@ -42,14 +40,25 @@ export class Map3dObj
     index = []
     uv = []
     tex-index = []
-    add-quad = (va, vb, ha1, ha2, hb1, hb2, material)->
+    add-quad = (va, vb, ha1, ha2, hb1, hb2, material, sidedef)->
       # add faces in CCW order
       position.push va.x,va.y,ha1, va.x,va.y,ha2
-      position.push vb.x,vb.y,ha1, vb.x,vb.y,ha2
-      uv.push 0,0, 0,1, 1,0, 1,1
+      position.push vb.x,vb.y,hb1, vb.x,vb.y,hb2
       n = index.length
       index.push n+2, n+1, n
       index.push n+1, n+2, n+3
+      # add uv
+      dx = vb.x - va.x
+      dy = vb.y - va.y
+      dist = Math.sqrt(dx*dx + dy*dy)
+      xoffs = sidedef.tex-x-offset
+      yoffs = sidedef.tex-y-offset
+      uv.push 0 + xoffs,    ha2 - yoffs
+      uv.push 0 + xoffs,    ha1 - yoffs
+      uv.push dist + xoffs, hb2 - yoffs
+      uv.push dist + xoffs, hb1 - yoffs
+      # note that our UVs have origin in bottom
+      # left of the texture and units are texels
       tex-index.push material, material, material, material
 
     if back isnt null
@@ -58,11 +67,11 @@ export class Map3dObj
 
       # Lower texture, Front side
       if front-floor < back-floor #and front.lower-tex != '-'
-       add-quad v-begin,v-end,  front-floor,back-floor,front-floor,back-floor, @tex-manager.get front.lower-tex
+       add-quad v-begin,v-end,  front-floor,back-floor,front-floor,back-floor, @tex-manager.get(front.lower-tex), front
 
       # Lower texture, Back side
       if front-floor > back-floor #and back.lower-tex != '-'
-       add-quad v-begin,v-end,  front-floor,back-floor,front-floor,back-floor, @tex-manager.get back.lower-tex
+       add-quad v-begin,v-end,  front-floor,back-floor,front-floor,back-floor, @tex-manager.get(back.lower-tex), back
 
       # Middle texture, Front side
       # Middle texture, Back side
@@ -74,6 +83,7 @@ export class Map3dObj
           geo.set-attribute 'position', new THREE.Float32BufferAttribute position,3
           geo.set-attribute 'uv', new THREE.Float32BufferAttribute uv,2
           geo.set-attribute 'texIndex', new THREE.Float32BufferAttribute tex-index,1
+          geo.set-attribute 'texBounds', new THREE.Float32BufferAttribute [0 for [0 til tex-index.length*4]],4
           return [geo]
     return []
 
@@ -94,9 +104,12 @@ export class Map3dObj
 
     # lend us your energy, ShapeBufferGeometry-sempai
     floor = new THREE.ShapeBufferGeometry shape-path.to-shapes!
-    tex-index = @tex-manager.get '-'
-    i = [tex-index for [0 til floor.get-index!.length]]
+    tex-index = @tex-manager.get sector.floor-flat
+    i = [tex-index for [0 til floor.get-attribute 'position' .count]]
     floor.set-attribute 'texIndex', new THREE.Float32BufferAttribute i,1
+
+    i = [0 for [0 til 4 * floor.get-attribute 'position' .count]]
+    floor.set-attribute 'texBounds', new THREE.Float32BufferAttribute i,4
 
     m = new THREE.Matrix4!.make-translation 0,0, sector.floor-height
     floor.apply-matrix4 m

@@ -16,9 +16,11 @@
     "jdataview": "^2.5.0",
     "jszip": "^3.2.2",
     "livescript": "^1.6.0",
+    "moo": "^0.5.1",
     "three": "^0.114.0",
     "three-buffer-geometry-utils": "git+https://github.com/ivee-tech/three-buffer-geometry-utils.git",
-    "three-orbit-controls": "^82.1.0"
+    "three-orbit-controls": "^82.1.0",
+    "three-sprite-texture-atlas-manager": "git+https://github.com/Leeft/three-sprite-texture-atlas-manager.git"
   },
   "devDependencies": {
     "brfs": "^2.0.2",

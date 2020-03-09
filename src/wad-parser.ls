@@ -133,12 +133,10 @@ export wad-parse = (data) ->
 # of the zip file.
 export pk3-parse = (data) -> new Promise (resolve, reject)->
   ## Returns a mapping from entries of the pk3 to node buffer objects.
-  zip <- jszip.load-async data, checkCRC32: true .then
+  zip <- jszip.load-async data, checkCRC32: false .then
   zip-entries = {}
-  promises = []
   zip.for-each (path, file)->
-    promises.push(file.async "nodebuffer" .then (buf)-> zip-entries[path] = buf)
-  <- Promise.all promises .then
+    zip-entries[path] = file
   resolve zip-entries
 
 # wad-read-map :: WAD JSON, string -> Promise(map JSON)
@@ -176,16 +174,27 @@ export wad-read-map = (wad, mapname)-> new Promise (resolve, reject) ->
   return reject "Map #mapname does not exist"
 
 export pk3-read-map = (zip, mapname)-> new Promise (resolve, reject)->
-  for pathname, buf of zip
+  for pathname, file of zip
     if path.parse(pathname).name == mapname
+      buf <- file.async 'nodebuffer' .then
       return wad-parse buf .then (wad)->
         return resolve wad-read-map wad, mapname
   reject "Map #mapname not found"
 
-export lump-to-image-data = (data, palette) ->
+export patch-to-image-data = (data, palette) ->
     lump = new jParser(data, WAD-SPEC(data)).parse 'PICTURE'
     image-data = new ImageData lump.width, lump.height
     for x,i in lump.data
+      if x != 255
+        image-data.data[4*i + 0] = palette.data[3*x + 0]
+        image-data.data[4*i + 1] = palette.data[3*x + 1]
+        image-data.data[4*i + 2] = palette.data[3*x + 2]
+        image-data.data[4*i + 3] = 255
+    return image-data
+export flat-to-image-data = (data, palette) ->
+    sz = Math.sqrt(data.length)
+    image-data = new ImageData sz,sz
+    for x,i in data
       if x != 255
         image-data.data[4*i + 0] = palette.data[3*x + 0]
         image-data.data[4*i + 1] = palette.data[3*x + 1]
