@@ -8,84 +8,130 @@ export class Map3dObj
     # we hold a giant buffer of uints
     geometries = []
     for sector in @model.sectors
+      #console.log "generating", sector
+      #sector.recalc-slope!
       for geo in @sector-to-geometry sector
         geometries.push geo
     for linedef in @model.linedefs
+      #if linedef.id % 5 != 5 then continue
+      #if linedef.id > 10000 then continue
+      #if linedef.id < 8000 then continue
+      #if linedef.id != -1 then continue
       for geo in @linedef-to-geometry linedef
+        #console.log "linedef", linedef
         geometries.push geo
 
+    # fixup geometries: we need to convert the index to a Float32 index to
+    # avoid overflow!
+    for geo in geometries
+      geo.set-index new THREE.Uint32BufferAttribute(geo.index.array, 1)
+
+
+    console.log "have #{@model.sectors.length} sectors"
+    console.log "have #{@model.linedefs.length} linedefs"
+    console.log "have #{geometries.length} geometries"
+    # between 12000 and 12400
+    #geometries = geometries[0 til 12000]  # 11314
+    window.geometries = geometries
+    #console.log geometries
     geo = BufferGeometryUtils.merge-buffer-geometries geometries, 0
+    window.geo = geo
+
+    @mesh = new THREE.Object3D!
     @tex-manager.fix-tex-bounds geo
-    console.log geo
     mesh = new THREE.Mesh geo, @tex-manager.get-shader-material!
+    @mesh.add mesh
     # Add wireframe view
-    wires-geo = new THREE.EdgesGeometry geo, 25
+    wires-geo = new THREE.EdgesGeometry geo, 5
     wires-mat = new THREE.LineBasicMaterial do
         color:0xffffff
-        linewidth: 4
     line = new THREE.LineSegments wires-geo, wires-mat
-    @mesh = new THREE.Object3D!
-    @mesh.add mesh
     @mesh.add line
     @mesh.scale.set 0.01,0.01,0.01
     #@mesh.position.set 0,0,sector.floor-height*0.01
 
   linedef-to-geometry: (linedef)->
     # Construct linedef face data!
-    front = linedef.front-sidedef
-    back = linedef.back-sidedef
-    v-begin = linedef.v-begin
-    v-end = linedef.v-end
-    position = []
-    index = []
-    uv = []
-    tex-index = []
-    add-quad = (va, vb, ha1, ha2, hb1, hb2, material, sidedef)->
-      # add faces in CCW order
-      position.push va.x,va.y,ha1, va.x,va.y,ha2
-      position.push vb.x,vb.y,hb1, vb.x,vb.y,hb2
-      n = index.length
-      index.push n+2, n+1, n
-      index.push n+1, n+2, n+3
+    {front-sidedef: front, back-sidedef: back, v-begin, v-end} = linedef
+    geometries = []
+    add-quad = (va, vb, z1, z2, sidedef, mode='lower')~>
+      # add faces in CCW order:
+      #    1----3     uv: top (=ha2-ha1)
+      #    | \  |
+      #    |  \ |
+      #    0----2     uv: bottom (=0)
+
+      ha1 = hb1 = z1
+      ha2 = hb2 = z2
+      if mode == 'lower' and sidedef.sector.slope-floor-mat
+        [Δx, Δy, _, Δoffset] = sidedef.sector.slope-floor-mat.elements[2 til 15 by 4]
+        ha1 = Δx*va.x + Δy*va.y + Δoffset + ha1
+        hb1 = Δx*vb.x + Δy*vb.y + Δoffset + hb1
+      other-sidedef = linedef.other-sidedef sidedef
+      if mode == 'lower' and other-sidedef.sector.slope-floor-mat
+        [Δx, Δy, _, Δoffset] = other-sidedef.sector.slope-floor-mat.elements[2 til 15 by 4]
+        ha2 = Δx*va.x + Δy*va.y + Δoffset + ha2
+        hb2 = Δx*vb.x + Δy*vb.y + Δoffset + hb2
+      if ha1 > ha2 or hb1 > hb2
+        return
+
+      geo = new THREE.BufferGeometry!
+      geo.set-attribute 'position', new THREE.Float32BufferAttribute([
+        va.x,va.y,ha1, va.x,va.y,ha2
+        vb.x,vb.y,hb1, vb.x,vb.y,hb2
+      ],3)
+      geo.set-index [2, 1, 0, 1, 2, 3]
       # add uv
       dx = vb.x - va.x
       dy = vb.y - va.y
       dist = Math.sqrt(dx*dx + dy*dy)
       xoffs = sidedef.tex-x-offset
       yoffs = sidedef.tex-y-offset
-      uv.push 0 + xoffs,    ha2 - yoffs
-      uv.push 0 + xoffs,    ha1 - yoffs
-      uv.push dist + xoffs, hb2 - yoffs
-      uv.push dist + xoffs, hb1 - yoffs
+      uv-top = 0
+      uv-bottom = 0
+      uv-left = 0
+      uv-right = 0
+      geo.set-attribute 'uv', new THREE.Float32BufferAttribute([
+          0 + xoffs,    ha2 + yoffs
+          0 + xoffs,    ha1 + yoffs
+          dist + xoffs, hb2 + yoffs
+          dist + xoffs, hb1 + yoffs
+      ],2)
       # note that our UVs have origin in bottom
       # left of the texture and units are texels
-      tex-index.push material, material, material, material
+      material = @tex-manager.get(sidedef["#{mode}Tex"])
+      geo.set-attribute 'texIndex', new THREE.Float32BufferAttribute([
+        material, material, material, material
+      ],1)
+      geo.set-attribute 'normal', new THREE.Float32BufferAttribute [0,0,0, 0,0,0, 0,0,0, 0,0,0],3
+      geo.set-attribute 'texBounds', new THREE.Float32BufferAttribute [0 for [0 til 4*4]],4
+      geometries.push geo
 
-    if back isnt null
-      front-floor = front.sector.floor-height
+    front-floor = front.sector.floor-height
+    front-ceiling = front.sector.ceiling-height
+    if back is null
+      # Middle texture, Front side
+      add-quad v-begin,v-end,  front-floor, front-ceiling, front, 'middle'
+      # linedefs that border the outside of the level have no back side
+    else
       back-floor = back.sector.floor-height
+      back-ceiling = back.sector.ceiling-height
 
       # Lower texture, Front side
-      if front-floor < back-floor #and front.lower-tex != '-'
-       add-quad v-begin,v-end,  front-floor,back-floor,front-floor,back-floor, @tex-manager.get(front.lower-tex), front
-
+      if front.sector.floor-flat != 'F_SKY1'
+        add-quad v-begin,v-end,  front-floor, back-floor, front, 'lower'
       # Lower texture, Back side
-      if front-floor > back-floor #and back.lower-tex != '-'
-       add-quad v-begin,v-end,  front-floor,back-floor,front-floor,back-floor, @tex-manager.get(back.lower-tex), back
+      if back.sector.floor-flat != 'F_SKY1'
+        add-quad v-end,v-begin,  back-floor, front-floor, back, 'lower'
 
-      # Middle texture, Front side
-      # Middle texture, Back side
       # Upper texture, Front side
+      if front.sector.ceiling-flat != 'F_SKY1'
+        add-quad v-begin,v-end,  back-ceiling, front-ceiling, front, 'upper'
       # Upper texture, Back side
-      if index.length > 0
-          geo = new THREE.BufferGeometry!
-          geo.set-index index
-          geo.set-attribute 'position', new THREE.Float32BufferAttribute position,3
-          geo.set-attribute 'uv', new THREE.Float32BufferAttribute uv,2
-          geo.set-attribute 'texIndex', new THREE.Float32BufferAttribute tex-index,1
-          geo.set-attribute 'texBounds', new THREE.Float32BufferAttribute [0 for [0 til tex-index.length*4]],4
-          return [geo]
-    return []
+      if back.sector.ceiling-flat != 'F_SKY1'
+        add-quad v-end,v-begin,  back-ceiling, front-ceiling, back, 'upper'
+
+    return geometries
 
   sector-to-geometry: (sector)->
     {boundary-cycles, hole-cycles} = sector.cycles!
@@ -102,16 +148,33 @@ export class Map3dObj
       shape-path.moveTo head.x, head.y
       for rest then shape-path.lineTo ..x, ..y
 
+    geometries = []
+
     # lend us your energy, ShapeBufferGeometry-sempai
     floor = new THREE.ShapeBufferGeometry shape-path.to-shapes!
+
     tex-index = @tex-manager.get sector.floor-flat
     i = [tex-index for [0 til floor.get-attribute 'position' .count]]
     floor.set-attribute 'texIndex', new THREE.Float32BufferAttribute i,1
-
     i = [0 for [0 til 4 * floor.get-attribute 'position' .count]]
     floor.set-attribute 'texBounds', new THREE.Float32BufferAttribute i,4
 
+    ceiling = floor.clone!
+    if sector.slope-floor-mat
+      floor.apply-matrix4 sector.slope-floor-mat
+    # Shift up
     m = new THREE.Matrix4!.make-translation 0,0, sector.floor-height
     floor.apply-matrix4 m
+    geometries.push floor
 
-    return [ floor ]
+    # ceiling is easier:
+    if sector.ceiling-flat != 'F_SKY1'
+      ceiling.index.array.reverse! # flip CW and CCW
+      tex-index = @tex-manager.get sector.ceiling-flat
+      i = [tex-index for [0 til ceiling.get-attribute 'position' .count]]
+      ceiling.set-attribute 'texIndex', new THREE.Float32BufferAttribute i,1
+      m = new THREE.Matrix4!.make-translation 0,0, sector.ceiling-height
+      ceiling.apply-matrix4 m
+      geometries.push ceiling
+
+    return geometries

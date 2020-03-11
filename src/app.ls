@@ -13,8 +13,7 @@ m3d = require './map-3d.ls'
 # Make renderer
 scene = new THREE.Scene()
 camera = new THREE.PerspectiveCamera( 90, window.innerWidth / window.innerHeight, 0.1, 1000 )
-renderer = new THREE.WebGLRenderer(antialias: true)
-renderer.setSize( window.innerWidth, window.innerHeight )
+renderer = new THREE.WebGLRenderer() #antialias: true)
 document.body.appendChild( renderer.domElement )
 
 # Make a cuuuuube ??
@@ -27,14 +26,30 @@ document.body.appendChild( renderer.domElement )
 camera.position.z = 4
 camera.up.set 0,0,1
 
+resize-renderer-to-display-size = ->
+  canvas = renderer.domElement
+  w = canvas.clientWidth   # * window.devicePixelRatio
+  h = canvas.clientHeight  # * window.devicePixelRatio
+  needResize = canvas.width !== w or canvas.height !== h
+  if needResize then renderer.setSize w, h, false
+  return needResize
+
+#renderer.domElement.add-event-listener "click", ->
+#  document.body.request-fullscreen!
+
 animate = ->
+  canvas = renderer.domElement
+  if resize-renderer-to-display-size!
+    camera.aspect = canvas.clientWidth / canvas.clientHeight
+    camera.updateProjectionMatrix!
+
   #cube.rotation.x += 0.01
   #cube.rotation.y += 0.01
   request-animation-frame animate
   renderer.render scene, camera
 animate!
 
-MAP = "MAP04"
+MAP = "MAP01"
 
 buf <- fetch-remote-file "assets/#{MAP}.wad" .then
 console.time "parse WAD"
@@ -69,4 +84,5 @@ scene.add map3d.mesh
 window.model = model
 window.map3d = map3d
 OrbitControls = require('three-orbit-controls')(THREE)
-new OrbitControls(camera, renderer.domElement)
+controls = new OrbitControls(camera, renderer.domElement)
+controls.panning-mode = 0 # horizontal panning

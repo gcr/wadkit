@@ -59,7 +59,17 @@ export WAD-SPEC = (data) ->
   LINEDEFrecord:
     v-begin: 'int16'
     v-end: 'int16'
-    flags: 'int16'
+    flags: 'uint16'
+    # impassible: 1
+    # block-monsters: 1
+    # two-sided: 1
+    # upper-unpegged: 1
+    # lower-unpegged: 1
+    # secret: 1
+    # block-sound: 1
+    # not-on-map: 1
+    # already-on-map: 1
+    # unused: 7
     action: 'int16'
     tag: 'int16'
     front-sidedef: 'int16' # aka "right" sidedef
