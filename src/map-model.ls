@@ -1,18 +1,82 @@
 THREE = require 'three'
 
+export class MapModel
+  # A class that encapsulates:
+  # - Link de-indexing
+  # - An event dispatcher that helps changes in this state
+  #   propogate to interested parties
+  # - A standard API to mutate this state
+
+  ({sectors, things, linedefs, sidedefs, vertexes}) ->
+    @vertexes = [ new Vertex .. for vertexes ]
+    @linedefs = [ new Linedef .. for linedefs ]
+    @sectors  = [ new Sector .. for sectors ]
+    @sidedefs  = [ new Sidedef .. for sidedefs ]
+
+    # Fix direct links
+    for @linedefs then ..v-begin = @vertexes[..v-begin]
+    for @linedefs then ..v-end = @vertexes[..v-end]
+    for @linedefs then ..front-sidedef = @sidedefs[..front-sidedef] or null
+    for @linedefs then ..back-sidedef = @sidedefs[..back-sidedef] or null
+    for @sidedefs then ..sector = @sectors[..sector] or null
+
+    for v,i in @vertexes then v.id = i
+    for l,i in @linedefs then l.id = i
+    for s,i in @sectors then s.id = i
+
+    # Fix indirect links
+    for l in @linedefs
+      l.v-begin.linedefs.push l
+      l.v-end.linedefs.push l
+      l.front-sidedef?.linedefs.push l
+      l.back-sidedef?.linedefs.push l
+      l.front-sidedef?.sector?.linedefs.push l
+      l.back-sidedef?.sector?.linedefs.push l
+
+    # Slopes
+    for @sectors then ..recalc-slope!
+
+    # Tags
+    sector-tags = {}
+    linedef-tags = {}
+    for @sectors then (sector-tags[..tag] ?= []).push ..
+    for @linedefs then (linedef-tags[..tag] ?= []).push ..
+    for @sectors then ..tagged-linedefs = linedef-tags[..tag] or []
+    for @linedefs then ..tagged-sectors = sector-tags[..tag] or []
+
+
+
+#    # Make vertex geometry
+#    vertices = []
+#    lines = []
+#    for v in @vertexes
+#      SCALE = 0.001
+#      vertices.push(v.x * SCALE, v.y * SCALE, 0.0)
+#    for l in @linedefs
+#      lines.push(l.v-begin, l.v-end)
+#
+#    @material = new THREE.LineBasicMaterial color: 0xffffff, linewidth: 5
+#    @geometry = new THREE.BufferGeometry!
+#      ..setAttribute 'position', new THREE.Float32BufferAttribute(vertices, 3)
+#      ..setIndex lines
+#      ..computeBoundingSphere!
+#
+#    @obj = new THREE.LineSegments @geometry, @material
+
 slope-from-vertices = (a,b,c)->
   a = a.clone!
   b = b.clone!
   c = c.clone!
-  # Construct a skew matrix.
+  # Construct a skew matrix, describing the plane of this slope that
+  # passes through these three points.
   #   1   0   0 0
   #   0   1   0 0
-  #   dzx dzy 1 dzoffset
+  #   dzx dzy 0 dzoffset  <-note we discord the existing z component
   #   0   0   0 1
 
-  # a is the origin!
-  # then, find the matrix that maps [b.x, b.y, 0] to [b.x,b.y,b.z]
-  # and [c.x,c.y,0] to [c.x,c.y,c.z]
+  # a is the origin
+  # find the matrix that maps [b.x, b.y, 0] to [b.x,b.y,b.z]
+  # and [c.x,c.y,0] to [c.x,c.y,c.z].
   # the new z = Δx*x + Δy*y
   b.sub a
   c.sub a
@@ -20,40 +84,16 @@ slope-from-vertices = (a,b,c)->
   {x: x2, y: y2, z: z2} = c
   Δx = (z1*y2 - z2*y1) / (x1*y2 - x2*y1)
   Δy = (z1*x2 - z2*x1) / (x2*y1 - x1*y2)
-  Δoffset = Δx*a.x + Δy*a.y #+ a.z*Δx*Δy
-
-  # First, the dzx component
-  #if Math.abs(b.x - a.x) < Math.abs(c.x - a.x)
-  #  # ac is a better choice
-  #  [b,c] = [c,b]
-  #dzx = (b.z - a.z) / (b.x - a.x)
-  # dzy
-  #if Math.abs(b.y - a.y) < Math.abs(c.y - a.y)
-  #  # ac is a better choice
-  #  [b,c] = [c,b]
-  #dzy = (b.z - a.z) / (b.y - a.y)
+  Δoffset = Δx*a.x + Δy*a.y - a.z#+ a.z*Δx*Δy
 
   # Offset
   #dzoffset = a.z + dzx*a.x + dzy*a.y
   m = new THREE.Matrix4!.set(
     1,   0,   0, 0,
     0,   1,   0, 0,
-    Δx, Δy, 1, -Δoffset,
+    Δx, Δy, 0, -Δoffset,
     0,   0,   0, 1
   )
-
-
-a = new THREE.Vector3 10, 15, 5
-b = new THREE.Vector3 10, 20, 5
-c = new THREE.Vector3 15, 15, 10
-m = slope-from-vertices a,b,c
-console.log "Before:", {a,b,c}
-console.log "Matrix:", m
-a.applyMatrix4 m
-b.applyMatrix4 m
-c.applyMatrix4 m
-console.log "After:", {a,b,c}
-
 
 export class Vertex
   ({@x, @y}) ->
@@ -64,6 +104,7 @@ export class Vertex
 
 export class Linedef
   ({@v-begin, @v-end, @flags, @action, @tag, @front-sidedef, @back-sidedef}) ->
+    @tagged-sectors = []
 
   interesting: -> @front-sidedef?.sector != @back-sidedef?.sector
   vertices: -> [@v-begin, @v-end]
@@ -85,6 +126,7 @@ export class Sidedef
 export class Sector
   ({@floor-height, @ceiling-height, @floor-flat, @ceiling-flat, @brightness, @special, @tag}) ->
     @linedefs = []
+    @tagged-linedefs = []
 
   cycles: ->
     # Ah yes, the cycle finder.
@@ -227,62 +269,11 @@ export class Sector
         v2 = new THREE.Vector3(b.x, b.y, other-sector-floor-height)
         @slope-floor-mat = slope-from-vertices v0, v1, v2
 
+  floor-matrix4: ->
+    if @slope-floor-mat
+      @slope-floor-mat
+    else
+      new THREE.Matrix4!.make-translation 0,0, @floor-height
 
-
-
-
-export class MapModel
-
-  # A class that encapsulates:
-  # - Link de-indexing
-  # - An event dispatcher that helps changes in this state
-  #   propogate to interested parties
-  # - A standard API to mutate this state
-
-  ({sectors, things, linedefs, sidedefs, vertexes}) ->
-    @vertexes = [ new Vertex .. for vertexes ]
-    @linedefs = [ new Linedef .. for linedefs ]
-    @sectors  = [ new Sector .. for sectors ]
-    @sidedefs  = [ new Sidedef .. for sidedefs ]
-
-    # Fix direct links
-    for @linedefs then ..v-begin = @vertexes[..v-begin]
-    for @linedefs then ..v-end = @vertexes[..v-end]
-    for @linedefs then ..front-sidedef = @sidedefs[..front-sidedef] or null
-    for @linedefs then ..back-sidedef = @sidedefs[..back-sidedef] or null
-    for @sidedefs then ..sector = @sectors[..sector] or null
-
-    for v,i in @vertexes then v.id = i
-    for l,i in @linedefs then l.id = i
-    for s,i in @sectors then s.id = i
-
-    # Fix indirect links
-    for l in @linedefs
-      l.v-begin.linedefs.push l
-      l.v-end.linedefs.push l
-      l.front-sidedef?.linedefs.push l
-      l.back-sidedef?.linedefs.push l
-      l.front-sidedef?.sector?.linedefs.push l
-      l.back-sidedef?.sector?.linedefs.push l
-
-    # More advanced geometry inferences
-    for @sectors then ..recalc-slope!
-
-
-
-#    # Make vertex geometry
-#    vertices = []
-#    lines = []
-#    for v in @vertexes
-#      SCALE = 0.001
-#      vertices.push(v.x * SCALE, v.y * SCALE, 0.0)
-#    for l in @linedefs
-#      lines.push(l.v-begin, l.v-end)
-#
-#    @material = new THREE.LineBasicMaterial color: 0xffffff, linewidth: 5
-#    @geometry = new THREE.BufferGeometry!
-#      ..setAttribute 'position', new THREE.Float32BufferAttribute(vertices, 3)
-#      ..setIndex lines
-#      ..computeBoundingSphere!
-#
-#    @obj = new THREE.LineSegments @geometry, @material
+  ceiling-matrix4: ->
+      new THREE.Matrix4!.make-translation 0,0, @ceiling-height

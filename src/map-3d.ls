@@ -1,6 +1,8 @@
 THREE = require 'three'
 BufferGeometryUtils = require('three-buffer-geometry-utils')(THREE)
 
+require! './type-specifications.ls'
+
 export class Map3dObj
   (@model, @tex-manager) ->
     sectors = @model.sectors
@@ -65,16 +67,17 @@ export class Map3dObj
       ha2 = hb2 = z2
       if mode == 'lower' and sidedef.sector.slope-floor-mat
         [Δx, Δy, _, Δoffset] = sidedef.sector.slope-floor-mat.elements[2 til 15 by 4]
-        ha1 = Δx*va.x + Δy*va.y + Δoffset + ha1
-        hb1 = Δx*vb.x + Δy*vb.y + Δoffset + hb1
+        ha1 = Δx*va.x + Δy*va.y + Δoffset
+        hb1 = Δx*vb.x + Δy*vb.y + Δoffset
       other-sidedef = linedef.other-sidedef sidedef
-      if mode == 'lower' and other-sidedef.sector.slope-floor-mat
+      if other-sidedef? and mode == 'lower' and other-sidedef.sector.slope-floor-mat
         [Δx, Δy, _, Δoffset] = other-sidedef.sector.slope-floor-mat.elements[2 til 15 by 4]
-        ha2 = Δx*va.x + Δy*va.y + Δoffset + ha2
-        hb2 = Δx*vb.x + Δy*vb.y + Δoffset + hb2
+        ha2 = Δx*va.x + Δy*va.y + Δoffset
+        hb2 = Δx*vb.x + Δy*vb.y + Δoffset
       if ha1 > ha2 or hb1 > hb2
         return
 
+      # add vertices
       geo = new THREE.BufferGeometry!
       geo.set-attribute 'position', new THREE.Float32BufferAttribute([
         va.x,va.y,ha1, va.x,va.y,ha2
@@ -99,6 +102,7 @@ export class Map3dObj
       ],2)
       # note that our UVs have origin in bottom
       # left of the texture and units are texels
+      # TODO: handle peggedness
       material = @tex-manager.get(sidedef["#{mode}Tex"])
       geo.set-attribute 'texIndex', new THREE.Float32BufferAttribute([
         material, material, material, material
@@ -107,6 +111,7 @@ export class Map3dObj
       geo.set-attribute 'texBounds', new THREE.Float32BufferAttribute [0 for [0 til 4*4]],4
       geometries.push geo
 
+    # First, handle geometry for this sector.
     front-floor = front.sector.floor-height
     front-ceiling = front.sector.ceiling-height
     if back is null
@@ -124,6 +129,8 @@ export class Map3dObj
       if back.sector.floor-flat != 'F_SKY1'
         add-quad v-end,v-begin,  back-floor, front-floor, back, 'lower'
 
+      # TODO: middle textures
+
       # Upper texture, Front side
       if front.sector.ceiling-flat != 'F_SKY1'
         add-quad v-begin,v-end,  back-ceiling, front-ceiling, front, 'upper'
@@ -131,7 +138,27 @@ export class Map3dObj
       if back.sector.ceiling-flat != 'F_SKY1'
         add-quad v-end,v-begin,  back-ceiling, front-ceiling, back, 'upper'
 
+      # FOFs on sector on the front side
+      for control-linedef in front.sector.tagged-linedefs
+        if type-specifications.fof-linedef-type control-linedef
+          {draw-flats} = that
+          control-sector = control-linedef.front-sidedef.sector
+          h1 = control-sector.floor-height
+          h2 = control-sector.ceiling-height
+          sidedef = control-linedef.front-sidedef
+          add-quad v-end, v-begin, h1, h2, sidedef, 'middle'
+      # FOFs on sector on the back side
+      for control-linedef in back.sector.tagged-linedefs
+        if type-specifications.fof-linedef-type control-linedef
+          {draw-flats} = that
+          control-sector = control-linedef.front-sidedef.sector
+          h1 = control-sector.floor-height
+          h2 = control-sector.ceiling-height
+          sidedef = control-linedef.front-sidedef
+          add-quad v-begin, v-end, h1, h2, sidedef, 'middle'
+
     return geometries
+
 
   sector-to-geometry: (sector)->
     {boundary-cycles, hole-cycles} = sector.cycles!
@@ -150,31 +177,45 @@ export class Map3dObj
 
     geometries = []
 
+    # helper
+    assign-flat = (geo, flat)~>
+        tex-index = @tex-manager.get flat
+        i = [tex-index for [0 til geo.get-attribute 'position' .count]]
+        geo.set-attribute 'texIndex', new THREE.Float32BufferAttribute i,1
+        i = [0 for [0 til 4 * geo.get-attribute 'position' .count]]
+        geo.set-attribute 'texBounds', new THREE.Float32BufferAttribute i,4
+
     # lend us your energy, ShapeBufferGeometry-sempai
-    floor = new THREE.ShapeBufferGeometry shape-path.to-shapes!
+    sector-geo = new THREE.ShapeBufferGeometry shape-path.to-shapes!
 
-    tex-index = @tex-manager.get sector.floor-flat
-    i = [tex-index for [0 til floor.get-attribute 'position' .count]]
-    floor.set-attribute 'texIndex', new THREE.Float32BufferAttribute i,1
-    i = [0 for [0 til 4 * floor.get-attribute 'position' .count]]
-    floor.set-attribute 'texBounds', new THREE.Float32BufferAttribute i,4
-
-    ceiling = floor.clone!
-    if sector.slope-floor-mat
-      floor.apply-matrix4 sector.slope-floor-mat
-    # Shift up
-    m = new THREE.Matrix4!.make-translation 0,0, sector.floor-height
-    floor.apply-matrix4 m
+    # Set up floor
+    floor = sector-geo.clone!
+    assign-flat floor, sector.floor-flat
+    floor.apply-matrix4 sector.floor-matrix4!
     geometries.push floor
 
-    # ceiling is easier:
+    # Set up ceiling
+    ceiling = sector-geo.clone!
+    ceiling.index.array.reverse! # flip CW and CCW
     if sector.ceiling-flat != 'F_SKY1'
-      ceiling.index.array.reverse! # flip CW and CCW
-      tex-index = @tex-manager.get sector.ceiling-flat
-      i = [tex-index for [0 til ceiling.get-attribute 'position' .count]]
-      ceiling.set-attribute 'texIndex', new THREE.Float32BufferAttribute i,1
-      m = new THREE.Matrix4!.make-translation 0,0, sector.ceiling-height
-      ceiling.apply-matrix4 m
+      assign-flat ceiling, sector.ceiling-flat
+      ceiling.apply-matrix4 sector.ceiling-matrix4!
       geometries.push ceiling
+
+    # FOFs
+    for control-linedef in sector.tagged-linedefs
+      if type-specifications.fof-linedef-type control-linedef
+        {draw-flats} = that
+        control-sector = control-linedef.front-sidedef.sector
+        if draw-flats
+          fof-floor = sector-geo.clone!
+          fof-floor.index.array.reverse!
+          fof-floor.apply-matrix4 control-sector.floor-matrix4!
+          assign-flat fof-floor, control-sector.floor-flat
+
+          fof-ceiling = sector-geo.clone!
+          fof-ceiling.apply-matrix4 control-sector.ceiling-matrix4!
+          assign-flat fof-ceiling, control-sector.ceiling-flat
+          geometries.push fof-floor, fof-ceiling
 
     return geometries
