@@ -71,6 +71,9 @@ export class Map3dObj extends THREE.Object3D
       if mode == 'lower' and sidedef.sector.slope-floor-mat
         ha1 = height-on-slope sidedef.sector.slope-floor-mat, va
         hb1 = height-on-slope sidedef.sector.slope-floor-mat, vb
+      if mode == 'middle' and sidedef.sector.slope-floor-mat
+        ha1 = height-on-slope sidedef.sector.slope-floor-mat, va
+        hb1 = height-on-slope sidedef.sector.slope-floor-mat, vb
       if mode == 'lower' and other-sidedef?.sector.slope-floor-mat
         ha2 = height-on-slope other-sidedef.sector.slope-floor-mat, va
         hb2 = height-on-slope other-sidedef.sector.slope-floor-mat, vb
@@ -80,6 +83,9 @@ export class Map3dObj extends THREE.Object3D
       if mode == 'upper' and other-sidedef?.sector.slope-ceiling-mat
         ha1 = height-on-slope other-sidedef.sector.slope-ceiling-mat, va
         hb1 = height-on-slope other-sidedef.sector.slope-ceiling-mat, vb
+      if mode == 'middle' and sidedef.sector.slope-ceiling-mat
+        ha2 = height-on-slope sidedef.sector.slope-ceiling-mat, va
+        hb2 = height-on-slope sidedef.sector.slope-ceiling-mat, vb
 
       if ha1 > ha2+1e-5 or hb1 > hb2+1e-5
         return
