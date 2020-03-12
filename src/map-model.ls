@@ -230,44 +230,61 @@ export class Sector
 
     return {boundary-cycles, hole-cycles}
 
-  recalc-slope: (mode = 'floor')->
-    # Linedef slopes!
-    if mode == 'floor'
-      for line in @linedefs
-        if line.back-sidedef?.sector is @ and line.action in [710,712,713]
-          reference-line = line
-          other-sector-floor-height = line.front-sidedef.sector.floor-height
-        if line.front-sidedef?.sector is @ and line.action in [700,702,703]
-          reference-line = line
-          other-sector-floor-height = line.back-sidedef.sector.floor-height
-      if @id == 35
-        console.log "Slope!", @, reference-line
+  recalc-slope: ->
+    farthest-vertex-from = (a,b)~>
+      # Which vertex is farthest from line a-b?
+      farthest-dist = 0
+      farthest-v = null
+      dx = b.x - a.x
+      dy = b.y - a.y
+      for l in @linedefs
+        for v in l.vertices!
+          d = dy*v.x - dx*v.y + b.x*a.y - b.y*a.x
+          # 2x the area of the triangle defined by a,b,v
+          d = Math.abs(d*d / (dx*dx+dy*dy)) # squared distance
+          if d > farthest-dist
+            farthest-v = v
+            farthest-dist = d
+      farthest-v
 
-      if reference-line
-        a = reference-line.v-begin
-        b = reference-line.v-end
-        dx = b.x - a.x
-        dy = b.y - a.y
-        # Which vertex is farthest?
-        farthest-dist = 0
-        farthest-v = null
-        for l in @linedefs
-          for v in l.vertices!
-            d = dy*v.x - dx*v.y + b.x*a.y - b.y*a.x
-            # 2x the area of the triangle defined by a,b,v
-            d = Math.abs(d*d / (dx*dx+dy*dy)) # squared distance
-            if @id == 35
-              console.log "Considering: ", v, d
-            if d > farthest-dist
-              farthest-v = v
-              farthest-dist = d
-        if @id == 35
-          console.log farthest-v
-        # Calculate three vertices
-        v0 = new THREE.Vector3(farthest-v.x, farthest-v.y, @floor-height)
-        v1 = new THREE.Vector3(a.x, a.y, other-sector-floor-height)
-        v2 = new THREE.Vector3(b.x, b.y, other-sector-floor-height)
-        @slope-floor-mat = slope-from-vertices v0, v1, v2
+    for line in @linedefs
+      # Back Floor slopes
+      if line.back-sidedef?.sector is @ and line.action in [710,712,713]
+        reference-floor-line = line
+        other-sector-floor-height = line.front-sidedef.sector.floor-height
+      # Front Floor slopes
+      if line.front-sidedef?.sector is @ and line.action in [700,702,703]
+        reference-floor-line = line
+        other-sector-floor-height = line.back-sidedef.sector.floor-height
+
+      # Back Ceiling slopes
+      if line.back-sidedef?.sector is @ and line.action in [703,711,712]
+        reference-ceiling-line = line
+        other-sector-ceiling-height = line.front-sidedef.sector.ceiling-height
+      # Front Ceiling slopes
+      if line.front-sidedef?.sector is @ and line.action in [701,702,713]
+        reference-ceiling-line = line
+        other-sector-ceiling-height = line.back-sidedef.sector.ceiling-height
+
+    if reference-floor-line
+      a = reference-floor-line.v-begin
+      b = reference-floor-line.v-end
+      far-v = farthest-vertex-from a,b
+      # Calculate three vertices
+      v0 = new THREE.Vector3(far-v.x, far-v.y, @floor-height)
+      v1 = new THREE.Vector3(a.x, a.y, other-sector-floor-height)
+      v2 = new THREE.Vector3(b.x, b.y, other-sector-floor-height)
+      @slope-floor-mat = slope-from-vertices v0, v1, v2
+
+    if reference-ceiling-line
+      a = reference-ceiling-line.v-begin
+      b = reference-ceiling-line.v-end
+      far-v = farthest-vertex-from a,b
+      # Calculate three vertices
+      v0 = new THREE.Vector3(far-v.x, far-v.y, @ceiling-height)
+      v1 = new THREE.Vector3(a.x, a.y, other-sector-ceiling-height)
+      v2 = new THREE.Vector3(b.x, b.y, other-sector-ceiling-height)
+      @slope-ceiling-mat = slope-from-vertices v0, v1, v2
 
   floor-matrix4: ->
     if @slope-floor-mat
@@ -276,4 +293,7 @@ export class Sector
       new THREE.Matrix4!.make-translation 0,0, @floor-height
 
   ceiling-matrix4: ->
+    if @slope-ceiling-mat
+      @slope-ceiling-mat
+    else
       new THREE.Matrix4!.make-translation 0,0, @ceiling-height

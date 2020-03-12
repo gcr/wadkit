@@ -1,5 +1,6 @@
 THREE = require 'three'
 require! './wad-parser.ls'
+grid2d = require './grid-2d.ls'
 tex3d = require './tex-3d.ls'
 require! 'fs'
 
@@ -15,13 +16,7 @@ scene = new THREE.Scene()
 camera = new THREE.PerspectiveCamera( 90, window.innerWidth / window.innerHeight, 0.1, 1000 )
 renderer = new THREE.WebGLRenderer() #antialias: true)
 document.body.appendChild( renderer.domElement )
-
-# Make a cuuuuube ??
-#geometry = new THREE.BoxGeometry!
-#material = new THREE.MeshBasicMaterial color: 0x00ff00
-#cube = new THREE.Mesh geometry, material
-#scene.add cube
-
+renderer.domElement.tabIndex = 0
 
 camera.position.z = 4
 camera.up.set 0,0,1
@@ -37,19 +32,8 @@ resize-renderer-to-display-size = ->
 #renderer.domElement.add-event-listener "click", ->
 #  document.body.request-fullscreen!
 
-animate = ->
-  canvas = renderer.domElement
-  if resize-renderer-to-display-size!
-    camera.aspect = canvas.clientWidth / canvas.clientHeight
-    camera.updateProjectionMatrix!
 
-  #cube.rotation.x += 0.01
-  #cube.rotation.y += 0.01
-  request-animation-frame animate
-  renderer.render scene, camera
-animate!
-
-MAP = "MAP01"
+MAP = "MAP02"
 
 buf <- fetch-remote-file "assets/#{MAP}.wad" .then
 console.time "parse WAD"
@@ -78,11 +62,38 @@ console.time-end 'pk3-parse'
 # Construct geometry
 console.time 'map3d'
 map3d = new m3d.Map3dObj model, tex-man
+map3d.scale.set 0.01,0.01,0.01
 console.time-end 'map3d'
 
-scene.add map3d.mesh
+scene.add map3d
 window.model = model
 window.map3d = map3d
-OrbitControls = require('three-orbit-controls')(THREE)
-controls = new OrbitControls(camera, renderer.domElement)
-controls.panning-mode = 0 # horizontal panning
+CameraControls = require './camera-controls.ls'
+controls = new CameraControls.OrbitalPanCameraControls camera, renderer.domElement
+#OrbitControls = require('three-orbit-controls')(THREE)
+#controls = new OrbitControls(camera, renderer.domElement)
+#controls.panning-mode = 0 # horizontal panning
+
+grid = new grid2d.MapGrid2D model, controls
+grid.scale.set 0.01,0.01,0.01
+scene.add grid
+
+alpha = 0.0
+animate = ->
+  canvas = renderer.domElement
+  if resize-renderer-to-display-size!
+    camera.aspect = canvas.clientWidth / canvas.clientHeight
+    camera.updateProjectionMatrix!
+
+  controls.update!
+  grid.update!
+
+  alpha += 0.01
+  map3d.set-intensity 0.5 + Math.sin(alpha)/2.0
+  grid.set-intensity 1.0 - (0.5 + Math.sin(alpha)/2.0)
+  map3d.set-intensity 1.0
+  grid.set-intensity 0.0
+
+  request-animation-frame animate
+  renderer.render scene, camera
+animate!

@@ -152,8 +152,10 @@ export class TextureManager
         varying float vTexIndex;
         varying vec2 vUv;
         varying vec4 vTexBounds;
+        varying vec3 vposition;
         void main () {
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          vposition = position;
           vUv = uv;
           vTexBounds = texBounds;
           vTexIndex = texIndex;
@@ -163,7 +165,9 @@ export class TextureManager
         varying float vTexIndex;
         varying highp vec2 vUv;
         varying highp vec4 vTexBounds;
+        varying vec3 vposition;
         uniform sampler2D atlas;
+        uniform float intensity;
         void main() {
             vec2 texLT = vec2(vTexBounds[0], vTexBounds[1]);
             vec2 texSize = vec2(vTexBounds[2], vTexBounds[3]);
@@ -179,7 +183,12 @@ export class TextureManager
                              mod(gl_FragCoord.xy + vec2(0,offs*5.0), 10.0)));
                 gl_FragColor = vec4(a*0.5, 0.0, 0.0, 1.0); //vec4(1.0, 0.0, 0.0, 1.0);
             } else {
-                gl_FragColor = texture2D(atlas, loc / 4096.);
+                //float grid = (
+                //    smoothstep(0.98, 1.0, fract(vposition.x/ 32.0)) +
+                //    smoothstep(0.98, 1.0, fract(vposition.y/ 32.0)) +
+                //    smoothstep(0.98, 1.0, fract(vposition.z/ 32.0))
+                //);
+                gl_FragColor = intensity * texture2D(atlas, loc / 4096.);// + grid;
             }
         }
     """
@@ -189,8 +198,9 @@ export class TextureManager
         atlas:
           type: 't'
           value: @atlas.knapsacks[0].root-texture
+        intensity: {type: 'f', value: 1.0}
       vertex-shader: vertex-shader
       fragment-shader: fragment-shader
       polygon-offset: true
       polygon-offset-factor: 1.0
-      polygon-offset-units: -8.0
+      polygon-offset-units: -4.0
