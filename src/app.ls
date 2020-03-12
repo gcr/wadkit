@@ -79,6 +79,10 @@ grid.scale.set 0.01,0.01,0.01
 scene.add grid
 
 alpha = 0.0
+toggle-edit = (e)->
+  if e.key == 'e' and not e.repeat
+    alpha := 1 - alpha
+renderer.domElement.add-event-listener 'keydown', toggle-edit, false
 animate = ->
   canvas = renderer.domElement
   if resize-renderer-to-display-size!
@@ -88,11 +92,11 @@ animate = ->
   controls.update!
   grid.update!
 
-  alpha += 0.01
-  map3d.set-intensity 0.5 + Math.sin(alpha)/2.0
-  grid.set-intensity 1.0 - (0.5 + Math.sin(alpha)/2.0)
-  map3d.set-intensity 1.0
-  grid.set-intensity 0.0
+  #alpha += 0.01
+  #map3d.set-intensity 0.5 + Math.sin(alpha)/2.0
+  #grid.set-intensity 1.0 - (0.5 + Math.sin(alpha)/2.0)
+  map3d.set-intensity 1-alpha
+  grid.set-intensity alpha
 
   request-animation-frame animate
   renderer.render scene, camera

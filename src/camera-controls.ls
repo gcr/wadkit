@@ -51,10 +51,11 @@ export class OrbitalPanCameraControls
     #if e.code == 'Tab' and not e.repeat
     #  @mode = 'rise'
     #  e.prevent-default!
+    return true
   handle-keyup: (e)->
-    console.log e
     if e.code == 'Space'
       @mode = 'pan'
+    return true
     #if e.code == 'Tab'
     #  @mode = 'pan'
     #  e.prevent-default!
