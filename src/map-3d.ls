@@ -3,25 +3,29 @@ BufferGeometryUtils = require('three-buffer-geometry-utils')(THREE)
 
 require! './type-specifications.ls'
 
-export class Map3dObj
+export class Map3dObj extends THREE.Object3D
   (@model, @tex-manager) ->
+    super!
+
     sectors = @model.sectors
 
     # we hold a giant buffer of uints
     geometries = []
-    for sector in @model.sectors
-      #console.log "generating", sector
-      #sector.recalc-slope!
-      for geo in @sector-to-geometry sector
-        geometries.push geo
+    line-geometries = []
     for linedef in @model.linedefs
       #if linedef.id % 5 != 5 then continue
       #if linedef.id > 10000 then continue
       #if linedef.id < 8000 then continue
       #if linedef.id != -1 then continue
-      for geo in @linedef-to-geometry linedef
-        #console.log "linedef", linedef
-        geometries.push geo
+      {faces, lines} = @linedef-to-geometry linedef
+      geometries.push ...faces
+      line-geometries.push ...lines
+    for sector in @model.sectors
+      #console.log "generating", sector
+      #sector.recalc-slope!
+      {faces, lines} = @sector-to-geometry sector
+      geometries.push ...faces
+      line-geometries.push ...lines
 
     # fixup geometries: we need to convert the index to a Float32 index to
     # avoid overflow!
@@ -32,30 +36,27 @@ export class Map3dObj
     console.log "have #{@model.sectors.length} sectors"
     console.log "have #{@model.linedefs.length} linedefs"
     console.log "have #{geometries.length} geometries"
-    # between 12000 and 12400
-    #geometries = geometries[0 til 12000]  # 11314
-    window.geometries = geometries
-    #console.log geometries
     geo = BufferGeometryUtils.merge-buffer-geometries geometries, 0
-    window.geo = geo
 
-    @mesh = new THREE.Object3D!
     @tex-manager.fix-tex-bounds geo
-    mesh = new THREE.Mesh geo, @tex-manager.get-shader-material!
-    @mesh.add mesh
+    @map-mesh = new THREE.Mesh geo, @tex-manager.get-shader-material!
+    @add @map-mesh
+
     # Add wireframe view
-    wires-geo = new THREE.EdgesGeometry geo, 5
-    wires-mat = new THREE.LineBasicMaterial do
+    wire-geo = new THREE.BufferGeometry!
+    wire-geo.set-attribute 'position', new THREE.Float32BufferAttribute line-geometries,3
+    wire-mat = new THREE.LineBasicMaterial do
         color:0xffffff
-    line = new THREE.LineSegments wires-geo, wires-mat
-    @mesh.add line
-    @mesh.scale.set 0.01,0.01,0.01
-    #@mesh.position.set 0,0,sector.floor-height*0.01
+        blending: THREE.AdditiveBlending
+        depth-write: false
+    @wireframe = new THREE.LineSegments wire-geo, wire-mat
+    @add @wireframe
 
   linedef-to-geometry: (linedef)->
     # Construct linedef face data!
     {front-sidedef: front, back-sidedef: back, v-begin, v-end} = linedef
-    geometries = []
+    faces = []
+    lines = []
     add-quad = (va, vb, z1, z2, sidedef, mode='lower')~>
       # add faces in CCW order:
       #    1----3     uv: top (=ha2-ha1)
@@ -65,16 +66,22 @@ export class Map3dObj
 
       ha1 = hb1 = z1
       ha2 = hb2 = z2
-      if mode == 'lower' and sidedef.sector.slope-floor-mat
-        [Δx, Δy, _, Δoffset] = sidedef.sector.slope-floor-mat.elements[2 til 15 by 4]
-        ha1 = Δx*va.x + Δy*va.y + Δoffset
-        hb1 = Δx*vb.x + Δy*vb.y + Δoffset
       other-sidedef = linedef.other-sidedef sidedef
-      if other-sidedef? and mode == 'lower' and other-sidedef.sector.slope-floor-mat
-        [Δx, Δy, _, Δoffset] = other-sidedef.sector.slope-floor-mat.elements[2 til 15 by 4]
-        ha2 = Δx*va.x + Δy*va.y + Δoffset
-        hb2 = Δx*vb.x + Δy*vb.y + Δoffset
-      if ha1 > ha2 or hb1 > hb2
+      # Apply slopes
+      if mode == 'lower' and sidedef.sector.slope-floor-mat
+        ha1 = height-on-slope sidedef.sector.slope-floor-mat, va
+        hb1 = height-on-slope sidedef.sector.slope-floor-mat, vb
+      if mode == 'lower' and other-sidedef?.sector.slope-floor-mat
+        ha2 = height-on-slope other-sidedef.sector.slope-floor-mat, va
+        hb2 = height-on-slope other-sidedef.sector.slope-floor-mat, vb
+      if mode == 'upper' and sidedef.sector.slope-ceiling-mat
+        ha2 = height-on-slope sidedef.sector.slope-ceiling-mat, va
+        hb2 = height-on-slope sidedef.sector.slope-ceiling-mat, vb
+      if mode == 'upper' and other-sidedef?.sector.slope-ceiling-mat
+        ha1 = height-on-slope other-sidedef.sector.slope-ceiling-mat, va
+        hb1 = height-on-slope other-sidedef.sector.slope-ceiling-mat, vb
+
+      if ha1 > ha2+1e-5 or hb1 > hb2+1e-5
         return
 
       # add vertices
@@ -109,7 +116,12 @@ export class Map3dObj
       ],1)
       geo.set-attribute 'normal', new THREE.Float32BufferAttribute [0,0,0, 0,0,0, 0,0,0, 0,0,0],3
       geo.set-attribute 'texBounds', new THREE.Float32BufferAttribute [0 for [0 til 4*4]],4
-      geometries.push geo
+      faces.push geo
+      # Add vertices to lines
+      lines.push va.x,va.y,ha1, va.x,va.y,ha2
+      lines.push va.x,va.y,ha2, vb.x,vb.y,hb2
+      lines.push vb.x,vb.y,hb2, vb.x,vb.y,hb1
+      lines.push vb.x,vb.y,hb1, va.x,va.y,ha1
 
     # First, handle geometry for this sector.
     front-floor = front.sector.floor-height
@@ -132,11 +144,13 @@ export class Map3dObj
       # TODO: middle textures
 
       # Upper texture, Front side
-      if front.sector.ceiling-flat != 'F_SKY1'
+      #if front.sector.ceiling-flat != 'F_SKY1'
+      if front.upper-tex != '-'
         add-quad v-begin,v-end,  back-ceiling, front-ceiling, front, 'upper'
       # Upper texture, Back side
-      if back.sector.ceiling-flat != 'F_SKY1'
-        add-quad v-end,v-begin,  back-ceiling, front-ceiling, back, 'upper'
+      #if back.sector.ceiling-flat != 'F_SKY1'
+      if back.upper-tex != '-'
+        add-quad v-end,v-begin,  front-ceiling, back-ceiling, back, 'upper'
 
       # FOFs on sector on the front side
       for control-linedef in front.sector.tagged-linedefs
@@ -157,7 +171,7 @@ export class Map3dObj
           sidedef = control-linedef.front-sidedef
           add-quad v-begin, v-end, h1, h2, sidedef, 'middle'
 
-    return geometries
+    return {faces, lines}
 
 
   sector-to-geometry: (sector)->
@@ -175,7 +189,7 @@ export class Map3dObj
       shape-path.moveTo head.x, head.y
       for rest then shape-path.lineTo ..x, ..y
 
-    geometries = []
+    faces = []
 
     # helper
     assign-flat = (geo, flat)~>
@@ -192,7 +206,7 @@ export class Map3dObj
     floor = sector-geo.clone!
     assign-flat floor, sector.floor-flat
     floor.apply-matrix4 sector.floor-matrix4!
-    geometries.push floor
+    faces.push floor
 
     # Set up ceiling
     ceiling = sector-geo.clone!
@@ -200,7 +214,7 @@ export class Map3dObj
     if sector.ceiling-flat != 'F_SKY1'
       assign-flat ceiling, sector.ceiling-flat
       ceiling.apply-matrix4 sector.ceiling-matrix4!
-      geometries.push ceiling
+      faces.push ceiling
 
     # FOFs
     for control-linedef in sector.tagged-linedefs
@@ -216,6 +230,16 @@ export class Map3dObj
           fof-ceiling = sector-geo.clone!
           fof-ceiling.apply-matrix4 control-sector.ceiling-matrix4!
           assign-flat fof-ceiling, control-sector.ceiling-flat
-          geometries.push fof-floor, fof-ceiling
+          faces.push fof-floor, fof-ceiling
 
-    return geometries
+    return {faces, lines:[]}
+
+  set-intensity: (val)->
+    @map-mesh.material.uniforms.intensity.value = 0.3 + val*0.7
+    m = 0.03 + (val * 0.97)
+    @wireframe.material.color = new THREE.Color m,m,m
+    @wireframe.alpha = val
+
+height-on-slope = (matrix, v)->
+    [Δx, Δy, _, Δoffset] = matrix.elements[2 til 15 by 4]
+    return Δx*v.x + Δy*v.y + Δoffset
