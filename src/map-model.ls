@@ -33,9 +33,6 @@ export class MapModel
       l.front-sidedef?.sector?.linedefs.push l
       l.back-sidedef?.sector?.linedefs.push l
 
-    # Slopes
-    for @sectors then ..recalc-slope!
-
     # Tags
     sector-tags = {}
     linedef-tags = {}
@@ -44,6 +41,8 @@ export class MapModel
     for @sectors then ..tagged-linedefs = linedef-tags[..tag] or []
     for @linedefs then ..tagged-sectors = sector-tags[..tag] or []
 
+    # Slopes
+    for @sectors then ..recalc-slope!
 
 
 #    # Make vertex geometry
@@ -231,6 +230,8 @@ export class Sector
     return {boundary-cycles, hole-cycles}
 
   recalc-slope: ->
+    if @_recursion_loop
+      throw new Error "Sector #{@id} slope copies from itself in a cycle"
     farthest-vertex-from = (a,b)~>
       # Which vertex is farthest from line a-b?
       farthest-dist = 0
@@ -257,6 +258,19 @@ export class Sector
         reference-floor-line = line
         other-sector-floor-height = line.back-sidedef.sector.floor-height
 
+      # Slope copy for floors
+      if line.front-sidedef?.sector is @ and line.action in [720, 722]
+        console.log "Copy floor slope"
+        for s in line.tagged-sectors
+          if s is @ then continue
+          try
+            @_recursion_loop = true
+            s.recalc-slope!
+          finally
+            @_recursion_loop = false
+          if s.slope-floor-mat
+            @slope-floor-mat = s.slope-floor-mat.clone!
+
       # Back Ceiling slopes
       if line.back-sidedef?.sector is @ and line.action in [703,711,712]
         reference-ceiling-line = line
@@ -265,6 +279,17 @@ export class Sector
       if line.front-sidedef?.sector is @ and line.action in [701,702,713]
         reference-ceiling-line = line
         other-sector-ceiling-height = line.back-sidedef.sector.ceiling-height
+      # Slope copy for ceilings
+      if line.front-sidedef?.sector is @ and line.action in [721, 722]
+        for s in line.tagged-sectors
+          if s is @ then continue
+          try
+            @_recursion_loop = true
+            s.recalc-slope!
+          finally
+            @_recursion_loop = false
+          if s.slope-ceiling-mat
+            @slope-ceiling-mat = s.slope-ceiling-mat.clone!
 
     if reference-floor-line
       a = reference-floor-line.v-begin
