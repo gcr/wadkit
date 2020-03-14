@@ -88,7 +88,15 @@ export class Map3dObj extends THREE.Object3D
         ha2 = height-on-slope sidedef.sector.slope-ceiling-mat, va
         hb2 = height-on-slope sidedef.sector.slope-ceiling-mat, vb
 
-      if ha1 > ha2+1e-5 or hb1 > hb2+1e-5
+      if ha1 > ha2 or hb1 > hb2
+        # normally we want just lines to be visible, even
+        # if they're sloped
+        return
+      if mode == 'upper' and ha1 == ha2 and hb1 == hb2
+        # upper textures are a special case. sometimes
+        # people add upper textures to linedefs with F_SKY1
+        # ceiling flats, so as a special case, we hide them.
+        # this avoids lines in the sky.
         return
 
       # add vertices
