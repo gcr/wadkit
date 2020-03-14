@@ -129,7 +129,7 @@ export class Map3dObj extends THREE.Object3D
       geo.set-attribute 'texIndex', new THREE.Float32BufferAttribute([
         material, material, material, material
       ],1)
-      geo.set-attribute 'normal', new THREE.Float32BufferAttribute [0,0,0, 0,0,0, 0,0,0, 0,0,0],3
+      #geo.set-attribute 'normal', new THREE.Float32BufferAttribute [0,0,0, 0,0,0, 0,0,0, 0,0,0],3
       geo.set-attribute 'texBounds', new THREE.Float32BufferAttribute [0 for [0 til 4*4]],4
       faces.push geo
       # Add vertices to lines
@@ -217,6 +217,7 @@ export class Map3dObj extends THREE.Object3D
 
     # lend us your energy, ShapeBufferGeometry-sempai
     sector-geo = new THREE.ShapeBufferGeometry shape-path.to-shapes!
+    sector-geo.delete-attribute 'normal'
 
     # Set up floor
     floor = sector-geo.clone!
