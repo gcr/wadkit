@@ -139,52 +139,53 @@ export class Map3dObj extends THREE.Object3D
       lines.push vb.x,vb.y,hb1, va.x,va.y,ha1
 
     # First, handle geometry for this sector.
-    front-floor = front.sector.floor-height
-    front-ceiling = front.sector.ceiling-height
+    front-floor = front?.sector?.floor-height
+    front-ceiling = front?.sector?.ceiling-height
     if back is null
       # Middle texture, Front side
-      add-quad v-begin,v-end,  front-floor, front-ceiling, front, 'middle'
+      if front-floor isnt null
+        add-quad v-begin,v-end,  front-floor, front-ceiling, front, 'middle'
       # linedefs that border the outside of the level have no back side
     else
       back-floor = back.sector.floor-height
       back-ceiling = back.sector.ceiling-height
 
       # Lower texture, Front side
-      if front.sector.floor-flat != 'F_SKY1'
+      if front and front.sector.floor-flat != 'F_SKY1'
         add-quad v-begin,v-end,  front-floor, back-floor, front, 'lower'
       # Lower texture, Back side
-      if back.sector.floor-flat != 'F_SKY1'
+      if back and back.sector.floor-flat != 'F_SKY1'
         add-quad v-end,v-begin,  back-floor, front-floor, back, 'lower'
 
       # TODO: middle textures
 
       # Upper texture, Front side
-      #if front.sector.ceiling-flat != 'F_SKY1'
-      if front.upper-tex != '-'
+      if front and front.upper-tex != '-'
         add-quad v-begin,v-end,  back-ceiling, front-ceiling, front, 'upper'
       # Upper texture, Back side
-      #if back.sector.ceiling-flat != 'F_SKY1'
-      if back.upper-tex != '-'
+      if back and back.upper-tex != '-'
         add-quad v-end,v-begin,  front-ceiling, back-ceiling, back, 'upper'
 
       # FOFs on sector on the front side
-      for control-linedef in front.sector.tagged-linedefs
+      for control-linedef in front?.sector?.tagged-linedefs or []
         if type-specifications.fof-linedef-type control-linedef
-          {draw-flats} = that
-          control-sector = control-linedef.front-sidedef.sector
-          h1 = control-sector.floor-height
-          h2 = control-sector.ceiling-height
-          sidedef = control-linedef.front-sidedef
-          add-quad v-end, v-begin, h1, h2, sidedef, 'middle'
+          {draw-lines} = that
+          control-sector = control-linedef?.front-sidedef?.sector
+          if draw-lines and control-sector
+            h1 = control-sector.floor-height
+            h2 = control-sector.ceiling-height
+            sidedef = control-linedef.front-sidedef
+            add-quad v-end, v-begin, h1, h2, sidedef, 'middle'
       # FOFs on sector on the back side
-      for control-linedef in back.sector.tagged-linedefs
+      for control-linedef in back?.sector?.tagged-linedefs or []
         if type-specifications.fof-linedef-type control-linedef
-          {draw-flats} = that
-          control-sector = control-linedef.front-sidedef.sector
-          h1 = control-sector.floor-height
-          h2 = control-sector.ceiling-height
-          sidedef = control-linedef.front-sidedef
-          add-quad v-begin, v-end, h1, h2, sidedef, 'middle'
+          {draw-lines} = that
+          control-sector = control-linedef?.front-sidedef?.sector
+          if draw-lines and control-sector
+            h1 = control-sector.floor-height
+            h2 = control-sector.ceiling-height
+            sidedef = control-linedef.front-sidedef
+            add-quad v-begin, v-end, h1, h2, sidedef, 'middle'
 
     return {faces, lines}
 
@@ -235,8 +236,8 @@ export class Map3dObj extends THREE.Object3D
     for control-linedef in sector.tagged-linedefs
       if type-specifications.fof-linedef-type control-linedef
         {draw-flats} = that
-        control-sector = control-linedef.front-sidedef.sector
-        if draw-flats
+        control-sector = control-linedef.front-sidedef?.sector
+        if draw-flats and control-sector
           fof-floor = sector-geo.clone!
           fof-floor.index.array.reverse!
           fof-floor.apply-matrix4 control-sector.floor-matrix4!
