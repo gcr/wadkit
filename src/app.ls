@@ -36,12 +36,8 @@ resize-renderer-to-display-size = ->
 MAP = "MAP04"
 
 buf <- fetch-remote-file "assets/#{MAP}.wad" .then
-console.time "parse WAD"
 wad <- wad-parser.wad-parse buf .then
-console.time-end "parse WAD"
-console.time "read wad info"
 map <- wad-parser.wad-read-map wad, MAP .then
-console.time-end "read wad info"
 
 require! './map-model.ls'
 console.time "map model"
@@ -49,13 +45,18 @@ model = new map-model.MapModel map
 console.time-end "map model"
 
 # Load textures
-console.time 'pk3-parse'
-
+console.time 'pk3-parse-and-tex-ingest'
 tex-man = new tex3d.TextureManager!
 # SRB2 2.2
+console.time '- fetch'
 buf <- fetch-remote-file "assets/srb2-2.2.pk3" .then
+console.time-end '- fetch'
+console.time '- pk3 parse'
 gfx-wad <- wad-parser.pk3-parse buf .then
+console.time-end '- pk3 parse'
+console.time '- tex ingest pk3'
 <- tex-man.ingest-pk3 gfx-wad .then
+console.time-end '- tex ingest pk3'
 
 # SRB2Kart
 #buf <- fetch-remote-file "assets/srb2kart/srb2.srb" .then
@@ -65,6 +66,7 @@ gfx-wad <- wad-parser.pk3-parse buf .then
 #gfx-wad <- wad-parser.wad-parse buf .then
 #<- tex-man.ingest-wad gfx-wad .then
 
+console.time-end 'pk3-parse-and-tex-ingest'
 
 #console.log "GFZWALL:", tex-man.get 'GFZWALL'
 #tex-man.get-shader-material!
