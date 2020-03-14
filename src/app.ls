@@ -33,7 +33,7 @@ resize-renderer-to-display-size = ->
 #  document.body.request-fullscreen!
 
 
-MAP = "MAP02"
+MAP = "MAP04"
 
 buf <- fetch-remote-file "assets/#{MAP}.wad" .then
 console.time "parse WAD"
@@ -50,11 +50,21 @@ console.time-end "map model"
 
 # Load textures
 console.time 'pk3-parse'
+
+tex-man = new tex3d.TextureManager!
+# SRB2 2.2
 buf <- fetch-remote-file "assets/srb2-2.2.pk3" .then
 gfx-wad <- wad-parser.pk3-parse buf .then
-tex-man = new tex3d.TextureManager!
-console.time-end 'pk3-parse'
 <- tex-man.ingest-pk3 gfx-wad .then
+
+# SRB2Kart
+#buf <- fetch-remote-file "assets/srb2kart/srb2.srb" .then
+#gfx-wad <- wad-parser.wad-parse buf .then
+#<- tex-man.ingest-wad gfx-wad .then
+#buf <- fetch-remote-file "assets/srb2kart/textures.kart" .then
+#gfx-wad <- wad-parser.wad-parse buf .then
+#<- tex-man.ingest-wad gfx-wad .then
+
 
 #console.log "GFZWALL:", tex-man.get 'GFZWALL'
 #tex-man.get-shader-material!
@@ -78,10 +88,10 @@ grid = new grid2d.MapGrid2D model, controls
 grid.scale.set 0.01,0.01,0.01
 scene.add grid
 
-alpha = 0.0
+s = {alpha: 0.0}
 toggle-edit = (e)->
   if e.key == 'e' and not e.repeat
-    alpha := 1 - alpha
+    s.alpha = 1 - s.alpha
 renderer.domElement.add-event-listener 'keydown', toggle-edit, false
 animate = ->
   canvas = renderer.domElement
@@ -95,8 +105,8 @@ animate = ->
   #alpha += 0.01
   #map3d.set-intensity 0.5 + Math.sin(alpha)/2.0
   #grid.set-intensity 1.0 - (0.5 + Math.sin(alpha)/2.0)
-  map3d.set-intensity 1-alpha
-  grid.set-intensity alpha
+  map3d.set-intensity 1-s.alpha
+  grid.set-intensity s.alpha
 
   request-animation-frame animate
   renderer.render scene, camera

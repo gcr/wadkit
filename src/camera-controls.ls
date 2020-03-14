@@ -77,6 +77,7 @@ export class OrbitalPanCameraControls
 
     @camera.position.copy @v .add @target
     @camera.look-at @target
+    #console.log @serialize!
 
   pan: (x, y)->
     @v.copy @camera.position .sub @target
@@ -113,3 +114,18 @@ export class OrbitalPanCameraControls
 
   zoom: (delta) ->
     @spherical.radius *= (1.0 + delta)
+
+  serialize: ->
+    # Save our state to a simple string that
+    # can be restored later
+    buf = new ArrayBuffer(24)
+    dv = new DataView(buf)
+    dv.setFloat32 0, @target.x
+    dv.setFloat32 4, @target.y
+    dv.setFloat32 8, @target.z
+    dv.setFloat32 12, @spherical.phi
+    dv.setFloat32 16, @spherical.theta
+    dv.setFloat32 20, @spherical.radius
+    s = ''
+    for new Uint8Array buf then s += ..
+    return btoa s
