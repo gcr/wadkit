@@ -7,8 +7,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "node_modules/.bin/browserify -t browserify-livescript -t brfs src/app.ls -o static/bundle.js",
     "watch": "node_modules/.bin/watchify -t browserify-livescript -t brfs src/app.ls -o static/bundle.js",
-    "dev": "npm-run-all --parallel watchify serve",
-    "serve": "node_modules/.bin/http-server -c 1 -a localhost",
+    "dev": "npm-run-all --parallel watch-livereload serve",
+    "serve": "node_modules/.bin/http-server -c 1 -a localhost static/",
     "watch-livereload": "node_modules/.bin/watchify -t browserify-livescript -t brfs -p [ browserify-livereload --host 127.0.0.1 --port 1337 ] src/app.ls -o static/bundle.js"
   },
   "author": "",
