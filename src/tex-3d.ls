@@ -172,7 +172,6 @@ export class TextureManager
         varying vec3 vposition;
         void main () {
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          vposition = position;
           vUv = uv;
           vTexBounds = texBounds;
           vTexIndex = texIndex;
@@ -182,7 +181,6 @@ export class TextureManager
         varying float vTexIndex;
         varying highp vec2 vUv;
         varying highp vec4 vTexBounds;
-        varying vec3 vposition;
         uniform sampler2D atlas;
         uniform float intensity;
         void main() {
