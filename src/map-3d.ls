@@ -58,6 +58,7 @@ export class Map3dObj extends THREE.Object3D
     faces = []
     lines = []
     add-quad = (va, vb, z1, z2, sidedef, mode='lower')~>
+      if not sidedef?.sector then return
       # add faces in CCW order:
       #    1----3     uv: top (=ha2-ha1)
       #    | \  |
