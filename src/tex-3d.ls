@@ -22,24 +22,41 @@ export class TextureManager
     @promises = []
 
   ingest-wad: (wad)->
+    # First, read the PLAYPAL palette and TEXTURES lump
     for lump in wad.lumps
       if lump.name == 'PLAYPAL'
         @palette = lump.data
-    if not @palette
-      throw new Error "can't load textures - no PLAYPAL palette"
-    @within-tx-start = null
-    for let lump in wad.lumps
+      # Parse texture lump!
       if lump.name == 'TEXTURES'
         str = new TextDecoder("utf-8").decode(lump.data)
         for k,texdata of texture-parser.TEXTURES str
           @tex-thunks[k] = ~>> @composite-texture texdata, k
+    if not @palette
+      throw new Error "can't load textures - no PLAYPAL palette"
+
+    state = null
+    for let lump in wad.lumps
+      # End textures
       if lump.name == 'TX_END'
-        @within-tx-start = false
-      if @within-tx-start
+        state := null
+      if lump.name == 'F_END'
+        state := null
+
+      # Next texture lump
+      if state == 'texture'
         @tex-thunks[lump.name] = ~>>
           wad-parser.patch-to-image-data lump.data, @palette
+      # Next flat lump
+      if state == 'flat'
+        @tex-thunks[lump.name] = ~>>
+          wad-parser.flat-to-image-data new Uint8Array(lump.data), @palette
+
+      # Start parsing textures
       if lump.name == 'TX_START'
-        @within-tx-start = true
+        state := 'texture'
+      # Start parsing flats
+      if lump.name == 'F_START'
+        state := 'flat'
     return Promise.resolve!
 
   ingest-pk3: (pk3)->

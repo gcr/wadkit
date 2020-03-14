@@ -13,16 +13,27 @@ export class MapModel
     @sectors  = [ new Sector .. for sectors ]
     @sidedefs  = [ new Sidedef .. for sidedefs ]
 
+    for v,i in @vertexes then v.id = i
+    for l,i in @linedefs then l.id = i
+    for s,i in @sectors then s.id = i
+
     # Fix direct links
     for @linedefs then ..v-begin = @vertexes[..v-begin]
     for @linedefs then ..v-end = @vertexes[..v-end]
     for @linedefs then ..front-sidedef = @sidedefs[..front-sidedef] or null
     for @linedefs then ..back-sidedef = @sidedefs[..back-sidedef] or null
     for @sidedefs then ..sector = @sectors[..sector] or null
-
-    for v,i in @vertexes then v.id = i
-    for l,i in @linedefs then l.id = i
-    for s,i in @sectors then s.id = i
+    for l in @linedefs
+      #if not l.front-sidedef
+      #  debugger;
+      #  throw new Error "Could not parse linedef #{l.id} : no front sidedef", @
+      if not l.v-begin
+        throw new Error "Could not parse linedef #{l.id} : No begin vertex"
+      if not l.v-end
+        throw new Error "Could not parse linedef #{l.id} : No end vertex"
+    for s in @sidedefs
+      if not s.sector
+        throw new Error "Could not parse sidedef #{s.id} : no front sector"
 
     # Fix indirect links
     for l in @linedefs
@@ -72,6 +83,10 @@ slope-from-vertices = (a,b,c)->
   #   0   1   0 0
   #   dzx dzy 0 dzoffset  <-note we discord the existing z component
   #   0   0   0 1
+  # This plane maps any point within the sector to the x,y,z
+  # point that lies on that sector's slope plane. Note that this
+  # discards the existing z component, so you don't offset the floor
+  # or ceiling height.
 
   # a is the origin
   # find the matrix that maps [b.x, b.y, 0] to [b.x,b.y,b.z]
@@ -85,8 +100,11 @@ slope-from-vertices = (a,b,c)->
   Δy = (z1*x2 - z2*x1) / (x2*y1 - x1*y2)
   Δoffset = Δx*a.x + Δy*a.y - a.z#+ a.z*Δx*Δy
 
-  # Offset
-  #dzoffset = a.z + dzx*a.x + dzy*a.y
+  # ...huh, it's interesting to me that this is similar
+  # to the ∧ operation from https://marctenbosch.com/quaternions/
+  # it looks like Δx and Δy is the division
+  # of two bivectors.
+
   m = new THREE.Matrix4!.set(
     1,   0,   0, 0,
     0,   1,   0, 0,
@@ -177,8 +195,8 @@ export class Sector
         cycles.push that
         for that then interesting-linedefs.delete ..
     if interesting-linedefs.size > 0
-      console.log "Unclosed linedefs in sector:", interesting-linedefs, @
-      throw new Error "Sector is not closed"
+      console.error "Unclosed linedefs in sector:", interesting-linedefs, @
+      return {boundary-cycles: [], hole-cycles: []}
 
     # Which cycles delimit sector boundaries and which
     # delimit holes? To find out, enumerate each cycle
@@ -231,7 +249,8 @@ export class Sector
 
   recalc-slope: ->
     if @_recursion_loop
-      throw new Error "Sector #{@id} slope copies from itself in a cycle"
+      console.error "Sector #{@id} slope copies from itself in a cycle", @
+      return
     farthest-vertex-from = (a,b)~>
       # Which vertex is farthest from line a-b?
       farthest-dist = 0
@@ -295,6 +314,9 @@ export class Sector
       a = reference-floor-line.v-begin
       b = reference-floor-line.v-end
       far-v = farthest-vertex-from a,b
+      if not far-v
+        console.error "Could not calculate floor slope for sector #{@id}: no farthest vertex"
+        return
       # Calculate three vertices
       v0 = new THREE.Vector3(far-v.x, far-v.y, @floor-height)
       v1 = new THREE.Vector3(a.x, a.y, other-sector-floor-height)
@@ -305,6 +327,9 @@ export class Sector
       a = reference-ceiling-line.v-begin
       b = reference-ceiling-line.v-end
       far-v = farthest-vertex-from a,b
+      if not far-v
+        console.error "Could not calculate ceiling slope for sector #{@id}: no farthest vertex"
+        return
       # Calculate three vertices
       v0 = new THREE.Vector3(far-v.x, far-v.y, @ceiling-height)
       v1 = new THREE.Vector3(a.x, a.y, other-sector-ceiling-height)
