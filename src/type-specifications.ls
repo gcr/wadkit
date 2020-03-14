@@ -40,17 +40,17 @@ FOF-TYPES = do
   146: # Intangible floor/ceiling with solid sides (fences/hoops maybe?)
     {-draw-flats, +draw-lines, -translucent, -shadows}
   150: # Air bobbing platform
-    {-draw-flats, +draw-lines, -translucent, -shadows}
+    {+draw-flats, +draw-lines, -translucent, -shadows}
   151: # Adjustable air bobbing platform
-    {-draw-flats, +draw-lines, -translucent, -shadows}
+    {+draw-flats, +draw-lines, -translucent, -shadows}
   152: # Adjustable air bobbing platform in reverse
-    {-draw-flats, +draw-lines, -translucent, -shadows}
+    {+draw-flats, +draw-lines, -translucent, -shadows}
   160: # Float/bob platform
-    {-draw-flats, +draw-lines, -translucent, -shadows}
+    {+draw-flats, +draw-lines, -translucent, -shadows}
   170: # Crumbling platform
-    {-draw-flats, +draw-lines, -translucent, -shadows}
+    {+draw-flats, +draw-lines, -translucent, -shadows}
   171: # Crumbling platform that will not return
-    {-draw-flats, +draw-lines, -translucent, -shadows}
+    {+draw-flats, +draw-lines, -translucent, -shadows}
   172: # "Platform" that crumbles and returns
     {+draw-flats, +draw-lines, -translucent, -shadows}
   173: # "Platform" that crumbles and doesn't return
