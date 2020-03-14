@@ -47,8 +47,8 @@ export class MapModel
     # Tags
     sector-tags = {}
     linedef-tags = {}
-    for @sectors then (sector-tags[..tag] ?= []).push ..
-    for @linedefs then (linedef-tags[..tag] ?= []).push ..
+    for @sectors then (sector-tags[..tag] ?= []).push .. if ..tag != 0
+    for @linedefs then (linedef-tags[..tag] ?= []).push .. if ..tag != 0
     for @sectors then ..tagged-linedefs = linedef-tags[..tag] or []
     for @linedefs then ..tagged-sectors = sector-tags[..tag] or []
 
