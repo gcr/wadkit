@@ -1,15 +1,20 @@
 THREE = require 'three'
-require! './wad-parser.ls'
-grid2d = require './grid-2d.ls'
-tex3d = require './tex-3d.ls'
 require! 'fs'
+
+wad-parser = require './data/wad-parser.ls'
+map-model = require './data/map-model.ls'
+
+grid2d = require './editor/grid-2d.ls'
+CameraControls = require './editor/camera-controls.ls'
+
+tex3d = require './3d/tex-3d.ls'
+m3d = require './3d/map-3d.ls'
 
 fetch-remote-file = (url) ->>
     response = await fetch url
     buf = await response.arrayBuffer()
     return buf
 
-m3d = require './map-3d.ls'
 
 # Make renderer
 scene = new THREE.Scene()
@@ -39,7 +44,6 @@ buf <- fetch-remote-file "assets/#{MAP}.wad" .then
 wad <- wad-parser.wad-parse buf .then
 map <- wad-parser.wad-read-map wad, MAP .then
 
-require! './map-model.ls'
 console.time "map model"
 model = new map-model.MapModel map
 console.time-end "map model"
@@ -80,7 +84,6 @@ console.time-end 'map3d'
 scene.add map3d
 window.model = model
 window.map3d = map3d
-CameraControls = require './camera-controls.ls'
 controls = new CameraControls.OrbitalPanCameraControls camera, renderer.domElement
 #OrbitControls = require('three-orbit-controls')(THREE)
 #controls = new OrbitControls(camera, renderer.domElement)

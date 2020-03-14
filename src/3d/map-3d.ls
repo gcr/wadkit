@@ -1,7 +1,6 @@
 THREE = require 'three'
 BufferGeometryUtils = require('three-buffer-geometry-utils')(THREE)
-
-require! './type-specifications.ls'
+require! '../data/type-specifications.ls'
 
 export class Map3dObj extends THREE.Object3D
   (@model, @tex-manager) ->

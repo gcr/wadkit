@@ -2,8 +2,8 @@ window.THREE = require 'three'
 
 require! 'path'
 
-require! './wad-parser.ls'
-require! './texture-parser.ls'
+require! '../data/wad-parser.ls'
+require! '../data/texture-parser.ls'
 atlas-manager = require 'three-sprite-texture-atlas-manager'
 
 export class TextureManager
