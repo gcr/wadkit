@@ -140,7 +140,7 @@ export class Map3dObj extends THREE.Object3D
     # First, handle geometry for this sector.
     front-floor = front?.sector?.floor-height
     front-ceiling = front?.sector?.ceiling-height
-    if back is null
+    if not back?
       # Middle texture, Front side
       if front-floor isnt null
         add-quad v-begin,v-end,  front-floor, front-ceiling, front, 'middle'

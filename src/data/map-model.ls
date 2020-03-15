@@ -8,25 +8,17 @@ export class MapModel
   # - A standard API to mutate this state
 
   ({sectors, things, linedefs, sidedefs, vertexes}) ->
-    @vertexes = [ new Vertex .. for vertexes ]
-    @linedefs = [ new Linedef .. for linedefs ]
-    @sectors  = [ new Sector .. for sectors ]
-    @sidedefs  = [ new Sidedef .. for sidedefs ]
+    @vertexes = [ new Vertex @, .. for vertexes ]
+    @linedefs = [ new Linedef @, .. for linedefs ]
+    @sectors  = [ new Sector @, .. for sectors ]
+    @sidedefs  = [ new Sidedef @, .. for sidedefs ]
 
     for v,i in @vertexes then v.id = i
     for l,i in @linedefs then l.id = i
     for s,i in @sectors then s.id = i
 
     # Fix direct links
-    for @linedefs then ..v-begin = @vertexes[..v-begin]
-    for @linedefs then ..v-end = @vertexes[..v-end]
-    for @linedefs then ..front-sidedef = @sidedefs[..front-sidedef] or null
-    for @linedefs then ..back-sidedef = @sidedefs[..back-sidedef] or null
-    for @sidedefs then ..sector = @sectors[..sector] or null
     for l in @linedefs
-      #if not l.front-sidedef
-      #  debugger;
-      #  throw new Error "Could not parse linedef #{l.id} : no front sidedef", @
       if not l.v-begin
         throw new Error "Could not parse linedef #{l.id} : No begin vertex"
       if not l.v-end
@@ -35,22 +27,20 @@ export class MapModel
       if not s.sector
         throw new Error "Could not parse sidedef #{s.id} : no front sector"
 
-    # Fix indirect links
+    # maintain cached links
+    @_vertex-to-linedefs = {}
+    @_sector-to-linedefs = {}
     for l in @linedefs
-      l.v-begin.linedefs.push l
-      l.v-end.linedefs.push l
-      l.front-sidedef?.linedefs.push l
-      l.back-sidedef?.linedefs.push l
-      l.front-sidedef?.sector?.linedefs.push l
-      l.back-sidedef?.sector?.linedefs.push l
+      for v in l.vertices!
+        (@_vertex-to-linedefs[v.id] ?= []).push l
+      (@_sector-to-linedefs[l.front-sidedef.sector.id] ?= []) .push l if l.front-sidedef?.sector?
+      (@_sector-to-linedefs[l.back-sidedef.sector.id] ?= []) .push l if l.back-sidedef?.sector?
 
     # Tags
-    sector-tags = {}
-    linedef-tags = {}
-    for @sectors then (sector-tags[..tag] ?= []).push .. if ..tag != 0
-    for @linedefs then (linedef-tags[..tag] ?= []).push .. if ..tag != 0
-    for @sectors then ..tagged-linedefs = linedef-tags[..tag] or []
-    for @linedefs then ..tagged-sectors = sector-tags[..tag] or []
+    @_sector-tags = {}
+    @_linedef-tags = {}
+    for @sectors then (@_sector-tags[..tag] ?= []).push .. if ..tag != 0
+    for @linedefs then (@_linedef-tags[..tag] ?= []).push .. if ..tag != 0
 
     # Slopes
     for @sectors then ..recalc-slope!
@@ -113,15 +103,23 @@ slope-from-vertices = (a,b,c)->
   )
 
 export class Vertex
-  ({@x, @y}) ->
-    @linedefs = []
+  (@model, {@x, @y}) ->
+    @id = null
+
+  linedefs:~ -> @model._vertex-to-linedefs[@id] or []
 
   # returns list of [linedef, vertex]
   neighbors: -> [[l, l.other-v @] for l in @linedefs]
 
 export class Linedef
-  ({@v-begin, @v-end, @flags, @action, @tag, @front-sidedef, @back-sidedef}) ->
-    @tagged-sectors = []
+  (@model, {v-begin: @_v-begin-id, v-end: @_v-end-id, @flags, @action, @tag, front-sidedef: @_front-sidedef-id, back-sidedef: @_back-sidedef-id}) ->
+    @id = null
+  tagged-sectors:~ -> (@model._sector-tags[@tag] if @tag) or []
+
+  v-begin:~ -> @model.vertexes[@_v-begin-id]
+  v-end:~ -> @model.vertexes[@_v-end-id]
+  front-sidedef:~ -> @model.sidedefs[@_front-sidedef-id]
+  back-sidedef:~ -> @model.sidedefs[@_back-sidedef-id]
 
   interesting: -> @front-sidedef?.sector != @back-sidedef?.sector
   vertices: -> [@v-begin, @v-end]
@@ -137,13 +135,18 @@ export class Linedef
         @v-begin
 
 export class Sidedef
-  ({@tex-x-offset, @tex-y-offset, @upper-tex, @lower-tex, @middle-tex, @sector}) ->
-    @linedefs = []
+  (@model, {@tex-x-offset, @tex-y-offset, @upper-tex, @lower-tex, @middle-tex, sector: @_sector-id}) ->
+    @id = null
+  sector:~ ->
+    @model.sectors[@_sector-id]
+  @linedefs = []
 
 export class Sector
-  ({@floor-height, @ceiling-height, @floor-flat, @ceiling-flat, @brightness, @special, @tag}) ->
-    @linedefs = []
-    @tagged-linedefs = []
+  (@model, {@floor-height, @ceiling-height, @floor-flat, @ceiling-flat, @brightness, @special, @tag}) ->
+    @id = null
+
+  linedefs:~ -> @model._sector-to-linedefs[@id] or []
+  tagged-linedefs:~ -> (@model._linedef-tags[@tag] if @tag) or []
 
   cycles: ->
     # Ah yes, the cycle finder.
