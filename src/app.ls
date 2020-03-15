@@ -38,37 +38,35 @@ resize-renderer-to-display-size = ->
 #  document.body.request-fullscreen!
 
 
-MAP = "MAP04"
+MAP = "MAPAA"
 
 buf <- fetch-remote-file "assets/#{MAP}.wad" .then
 wad <- wad-parser.wad-parse buf .then
 map <- wad-parser.wad-read-map wad, MAP .then
 
-console.time "map model"
 model = new map-model.MapModel map
-console.time-end "map model"
 
 # Load textures
 console.time 'pk3-parse-and-tex-ingest'
 tex-man = new tex3d.TextureManager!
 # SRB2 2.2
-console.time '- fetch'
-buf <- fetch-remote-file "assets/srb2-2.2.pk3" .then
-console.time-end '- fetch'
-console.time '- pk3 parse'
-gfx-wad <- wad-parser.pk3-parse buf .then
-console.time-end '- pk3 parse'
-console.time '- tex ingest pk3'
-<- tex-man.ingest-pk3 gfx-wad .then
-console.time-end '- tex ingest pk3'
+#console.time '- fetch'
+#buf <- fetch-remote-file "assets/srb2-2.2.pk3" .then
+#console.time-end '- fetch'
+#console.time '- pk3 parse'
+#gfx-wad <- wad-parser.pk3-parse buf .then
+#console.time-end '- pk3 parse'
+#console.time '- tex ingest pk3'
+#<- tex-man.ingest-pk3 gfx-wad .then
+#console.time-end '- tex ingest pk3'
 
 # SRB2Kart
-#buf <- fetch-remote-file "assets/srb2kart/srb2.srb" .then
-#gfx-wad <- wad-parser.wad-parse buf .then
-#<- tex-man.ingest-wad gfx-wad .then
-#buf <- fetch-remote-file "assets/srb2kart/textures.kart" .then
-#gfx-wad <- wad-parser.wad-parse buf .then
-#<- tex-man.ingest-wad gfx-wad .then
+buf <- fetch-remote-file "assets/srb2kart/srb2.srb" .then
+gfx-wad <- wad-parser.wad-parse buf .then
+<- tex-man.ingest-wad gfx-wad .then
+buf <- fetch-remote-file "assets/srb2kart/textures.kart" .then
+gfx-wad <- wad-parser.wad-parse buf .then
+<- tex-man.ingest-wad gfx-wad .then
 
 console.time-end 'pk3-parse-and-tex-ingest'
 
@@ -84,6 +82,7 @@ console.time-end 'map3d'
 scene.add map3d
 window.model = model
 window.map3d = map3d
+window.tex = tex-man
 controls = new CameraControls.OrbitalPanCameraControls camera, renderer.domElement
 #OrbitControls = require('three-orbit-controls')(THREE)
 #controls = new OrbitControls(camera, renderer.domElement)
@@ -116,3 +115,61 @@ animate = ->
   request-animation-frame animate
   renderer.render scene, camera
 animate!
+
+
+vertex-shader = """
+    attribute float texIndex;
+    attribute vec4 texBounds;
+    varying float vTexIndex;
+    varying vec2 vUv;
+    varying vec4 vTexBounds;
+    varying vec3 vposition;
+    void main () {
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      vposition = position;
+    }
+"""
+fragment-shader = """
+    varying vec3 vposition;
+    void main() {
+        gl_FragColor = vec4(vposition, 1);
+    }
+"""
+pick-mat = new THREE.ShaderMaterial vertex-shader: vertex-shader, fragment-shader: fragment-shader
+
+# set up the geometry
+geo = map3d.map-mesh.geometry
+mesh = new THREE.Mesh geo, pick-mat
+mesh.rotation.copy map3d.rotation
+mesh.scale.copy map3d.scale
+mesh.position.copy map3d.position
+
+# set up the scene?
+picking-scene = with new THREE.Scene!
+  ..background = new THREE.Color(0)
+  ..add mesh
+
+# render to a custom render target
+picking-texture = new THREE.WebGLRenderTarget 1, 1, do
+  type: THREE.FloatType
+  format: THREE.RGBAFormat
+pixel-buffer = new Float32Array(4)
+pixel-ratio = renderer.get-pixel-ratio!
+pick = (x,y)->
+  camera.set-view-offset(
+        renderer.getContext().drawingBufferWidth,   # full width
+        renderer.getContext().drawingBufferHeight,  # full top
+        x * pixelRatio,             # rect x
+        y * pixelRatio,             # rect y
+        1,                                          # rect width
+        1,                                          # rect height
+  );
+  # render the scene
+  renderer.set-render-target picking-texture
+  renderer.render picking-scene, camera
+  renderer.set-render-target null
+  camera.clear-view-offset!
+  renderer.read-render-target-pixels picking-texture, 0,0,1,1, pixel-buffer
+
+renderer.domElement.add-event-listener 'mousemove', (e)->
+  pick? e.x,e.y
