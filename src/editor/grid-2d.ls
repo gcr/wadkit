@@ -86,7 +86,7 @@ export class MapGrid2D extends THREE.Object3D
     #@grid.material.uniforms.color.value = new THREE.Vector3 0.3*val,0.3*val,0.3*val
     #@grid-front.material.uniforms.color.value = new THREE.Vector3 0.1*val,0.1*val,0.1*val
     @lines-front.material.uniforms.color.value = new THREE.Vector3 val,val,val
-    @lines.material.uniforms.color.value = new THREE.Vector3 0.5*val,0.5*val,0.5*val
+    @lines.material.uniforms.color.value = new THREE.Vector3 val,val,val
 
 
   update: ->
