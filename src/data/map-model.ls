@@ -7,7 +7,7 @@ export class MapModel
   #   propogate to interested parties
   # - A standard API to mutate this state
 
-  ({sectors, things, linedefs, sidedefs, vertexes}) ->
+  (@wad, {sectors, things, linedefs, sidedefs, vertexes}) ->
     @vertexes = [ new Vertex @, .. for vertexes ]
     @linedefs = [ new Linedef @, .. for linedefs ]
     @sectors  = [ new Sector @, .. for sectors ]

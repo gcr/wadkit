@@ -166,6 +166,10 @@ export class TextureManager
     vertex-shader = """
         attribute float texIndex;
         attribute vec4 texBounds;
+        attribute float attrType;
+        attribute float attrId;
+        varying float vType;
+        varying float vId;
         varying float vTexIndex;
         varying vec2 vUv;
         varying vec4 vTexBounds;
@@ -175,21 +179,44 @@ export class TextureManager
           vUv = uv;
           vTexBounds = texBounds;
           vTexIndex = texIndex;
+          vType = attrType;
+          vId = attrId;
         }
     """
     fragment-shader = """
         varying float vTexIndex;
+        varying float vType;
+        varying float vId;
         varying highp vec2 vUv;
         varying highp vec4 vTexBounds;
         uniform sampler2D atlas;
-        uniform float intensity;
+        uniform float intensityLinedef;
+        uniform float intensityFloor;
+        uniform float intensityCeiling;
+        uniform float intensityFofFloor;
+        uniform float intensityFofCeiling;
+        uniform float intensityFofLinedef;
+        uniform float typeMask;
         void main() {
             vec2 texLT = vec2(vTexBounds[0], vTexBounds[1]);
             vec2 texSize = vec2(vTexBounds[2], vTexBounds[3]);
             float epsilon = 0.001;
             vec2 loc = texLT + (clamp(fract(vUv / texSize),
                 0.001, 0.999) * texSize);
-            //vec2 loc = texLT + (fract(vUv / texSize) * texSize);
+            float mask = 1.0;
+            if (vType == 1.0) {
+              mask = intensityLinedef;
+            } else if (vType == 2.0) {
+              mask = intensityFloor;
+            } else if (vType == 4.0) {
+              mask = intensityCeiling;
+            } else if (vType == 8.0) {
+              mask = intensityFofFloor;
+            } else if (vType == 16.0) {
+              mask = intensityFofCeiling;
+            } else if (vType == 32.0) {
+              mask = intensityFofLinedef;
+            }
             if (vTexIndex == -1.0) {
                 // 404 texture not found
                 float offs = step(10.0, mod(gl_FragCoord.x, 20.0));
@@ -198,12 +225,7 @@ export class TextureManager
                              mod(gl_FragCoord.xy + vec2(0,offs*5.0), 10.0)));
                 gl_FragColor = vec4(a*0.5, 0.0, 0.0, 1.0); //vec4(1.0, 0.0, 0.0, 1.0);
             } else {
-                //float grid = (
-                //    smoothstep(0.98, 1.0, fract(vposition.x/ 32.0)) +
-                //    smoothstep(0.98, 1.0, fract(vposition.y/ 32.0)) +
-                //    smoothstep(0.98, 1.0, fract(vposition.z/ 32.0))
-                //);
-                gl_FragColor = intensity * texture2D(atlas, loc / 4096.);// + grid;
+                gl_FragColor = mask*texture2D(atlas, loc / 4096.);// + grid;
             }
         }
     """
@@ -213,7 +235,12 @@ export class TextureManager
         atlas:
           type: 't'
           value: @atlas.knapsacks[0].root-texture
-        intensity: {type: 'f', value: 1.0}
+        intensityLinedef: {type: 'f', value: 1.0}
+        intensityFloor: {type: 'f', value: 1.0}
+        intensityCeiling: {type: 'f', value: 1.0}
+        intensityFofFloor: {type: 'f', value: 1.0}
+        intensityFofCeiling: {type: 'f', value: 1.0}
+        intensityFofLinedef: {type: 'f', value: 1.0}
       vertex-shader: vertex-shader
       fragment-shader: fragment-shader
       polygon-offset: true

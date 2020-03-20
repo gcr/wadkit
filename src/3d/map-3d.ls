@@ -2,6 +2,21 @@ THREE = require 'three'
 BufferGeometryUtils = require('three-buffer-geometry-utils')(THREE)
 require! '../data/type-specifications.ls'
 
+TAGS = do
+  is-linedef: 1
+  is-floor: 2
+  is-ceiling: 4
+  is-fof-floor: 8
+  is-fof-ceiling: 16
+  is-fof-linedef: 32
+
+tag-geometry = (geo, id, tag) ->
+  x = [tag for [0 til geo.get-attribute 'position' .array.length / 3]]
+  y = [id for [0 til geo.get-attribute 'position' .array.length / 3]]
+  geo.set-attribute 'attrType', new THREE.Float32BufferAttribute x, 1
+  geo.set-attribute 'attrId', new THREE.Float32BufferAttribute y, 1
+
+
 export class Map3dObj extends THREE.Object3D
   (@model, @tex-manager) ->
     super!
@@ -31,7 +46,6 @@ export class Map3dObj extends THREE.Object3D
     for geo in geometries
       geo.set-index new THREE.Uint32BufferAttribute(geo.index.array, 1)
 
-
     console.log "have #{@model.sectors.length} sectors"
     console.log "have #{@model.linedefs.length} linedefs"
     console.log "have #{geometries.length} geometries"
@@ -56,7 +70,7 @@ export class Map3dObj extends THREE.Object3D
     {front-sidedef: front, back-sidedef: back, v-begin, v-end} = linedef
     faces = []
     lines = []
-    add-quad = (va, vb, z1, z2, sidedef, mode='lower')~>
+    add-quad = (va, vb, z1, z2, sidedef, mode='lower', geo-type)~>
       if not sidedef?.sector then return
       # add faces in CCW order:
       #    1----3     uv: top (=ha2-ha1)
@@ -128,8 +142,8 @@ export class Map3dObj extends THREE.Object3D
       geo.set-attribute 'texIndex', new THREE.Float32BufferAttribute([
         material, material, material, material
       ],1)
-      #geo.set-attribute 'normal', new THREE.Float32BufferAttribute [0,0,0, 0,0,0, 0,0,0, 0,0,0],3
       geo.set-attribute 'texBounds', new THREE.Float32BufferAttribute [0 for [0 til 4*4]],4
+      tag-geometry geo, linedef.id, geo-type
       faces.push geo
       # Add vertices to lines
       lines.push va.x,va.y,ha1, va.x,va.y,ha2
@@ -143,7 +157,7 @@ export class Map3dObj extends THREE.Object3D
     if not back?
       # Middle texture, Front side
       if front-floor isnt null
-        add-quad v-begin,v-end,  front-floor, front-ceiling, front, 'middle'
+        add-quad v-begin,v-end,  front-floor, front-ceiling, front, 'middle', TAGS.is-linedef
       # linedefs that border the outside of the level have no back side
     else
       back-floor = back.sector.floor-height
@@ -151,19 +165,19 @@ export class Map3dObj extends THREE.Object3D
 
       # Lower texture, Front side
       if front and front.sector.floor-flat != 'F_SKY1'
-        add-quad v-begin,v-end,  front-floor, back-floor, front, 'lower'
+        add-quad v-begin,v-end,  front-floor, back-floor, front, 'lower', TAGS.is-linedef
       # Lower texture, Back side
       if back and back.sector.floor-flat != 'F_SKY1'
-        add-quad v-end,v-begin,  back-floor, front-floor, back, 'lower'
+        add-quad v-end,v-begin,  back-floor, front-floor, back, 'lower', TAGS.is-linedef
 
       # TODO: middle textures
 
       # Upper texture, Front side
       if front and front.upper-tex != '-'
-        add-quad v-begin,v-end,  back-ceiling, front-ceiling, front, 'upper'
+        add-quad v-begin,v-end,  back-ceiling, front-ceiling, front, 'upper', TAGS.is-linedef
       # Upper texture, Back side
       if back and back.upper-tex != '-'
-        add-quad v-end,v-begin,  front-ceiling, back-ceiling, back, 'upper'
+        add-quad v-end,v-begin,  front-ceiling, back-ceiling, back, 'upper', TAGS.is-linedef
 
       # FOFs on sector on the front side
       for control-linedef in front?.sector?.tagged-linedefs or []
@@ -174,7 +188,7 @@ export class Map3dObj extends THREE.Object3D
             h1 = control-sector.floor-height
             h2 = control-sector.ceiling-height
             sidedef = control-linedef.front-sidedef
-            add-quad v-end, v-begin, h1, h2, sidedef, 'middle'
+            add-quad v-end, v-begin, h1, h2, sidedef, 'middle', TAGS.is-fof-linedef
       # FOFs on sector on the back side
       for control-linedef in back?.sector?.tagged-linedefs or []
         if type-specifications.fof-linedef-type control-linedef
@@ -184,7 +198,7 @@ export class Map3dObj extends THREE.Object3D
             h1 = control-sector.floor-height
             h2 = control-sector.ceiling-height
             sidedef = control-linedef.front-sidedef
-            add-quad v-begin, v-end, h1, h2, sidedef, 'middle'
+            add-quad v-begin, v-end, h1, h2, sidedef, 'middle', TAGS.is-fof-linedef
 
     return {faces, lines}
 
@@ -221,6 +235,7 @@ export class Map3dObj extends THREE.Object3D
     # Set up floor
     floor = sector-geo.clone!
     assign-flat floor, sector.floor-flat
+    tag-geometry floor, sector.id, TAGS.is-floor
     floor.apply-matrix4 sector.floor-matrix4!
     faces.push floor
 
@@ -229,6 +244,7 @@ export class Map3dObj extends THREE.Object3D
     ceiling.index.array.reverse! # flip CW and CCW
     if sector.ceiling-flat != 'F_SKY1'
       assign-flat ceiling, sector.ceiling-flat
+      tag-geometry ceiling, sector.id, TAGS.is-ceiling
       ceiling.apply-matrix4 sector.ceiling-matrix4!
       faces.push ceiling
 
@@ -242,19 +258,26 @@ export class Map3dObj extends THREE.Object3D
           fof-floor.index.array.reverse!
           fof-floor.apply-matrix4 control-sector.floor-matrix4!
           assign-flat fof-floor, control-sector.floor-flat
+          tag-geometry fof-floor, sector.id, TAGS.is-fof-floor
 
           fof-ceiling = sector-geo.clone!
           fof-ceiling.apply-matrix4 control-sector.ceiling-matrix4!
           assign-flat fof-ceiling, control-sector.ceiling-flat
+          tag-geometry fof-ceiling, sector.id, TAGS.is-fof-ceiling
           faces.push fof-floor, fof-ceiling
 
     return {faces, lines:[]}
 
-  set-intensity: (val)->
-    @map-mesh.material.uniforms.intensity.value = 0.3 + val*0.7
-    m = 0.03 + (val * 0.97)
+  set-intensity: ({linedef= 1.0, floor= 1.0, ceiling= 1.0, fof-floor= 1.0, fof-ceiling= 1.0, fof-linedef= 1.0, wireframe= 1.0}={})->
+    @map-mesh.material.uniforms.intensity-linedef.value = linedef
+    @map-mesh.material.uniforms.intensity-floor.value = floor
+    @map-mesh.material.uniforms.intensity-ceiling.value = ceiling
+    @map-mesh.material.uniforms.intensity-fof-linedef.value = fof-linedef
+    @map-mesh.material.uniforms.intensity-fof-floor.value = fof-floor
+    @map-mesh.material.uniforms.intensity-fof-ceiling.value = fof-ceiling
+    m = wireframe
     @wireframe.material.color = new THREE.Color m,m,m
-    @wireframe.alpha = val
+    #@wireframe.alpha = val
 
 height-on-slope = (matrix, v)->
     [Δx, Δy, _, Δoffset] = matrix.elements[2 til 15 by 4]
