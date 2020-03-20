@@ -3,13 +3,15 @@ THREE = require 'three'
 CameraControls = require './camera-controls.ls'
 grid2d = require './grid-2d.ls'
 m3d = require '../3d/map-3d.ls'
+picker = require './picker.ls'
 
 Vue.component 'map-editor' do
   # Represents a map editor component.
   template: '''
     <div class='map-editor fullsize'>
       <context-stack keyRef='canvas' :editor='this' ref='stack'/>
-      <canvas ref='canvas' tabindex=0 />
+      <canvas ref='canvas' tabindex=0
+              @mousemove="canvasMouseMove"/>
     </div>
   '''
   props: ['map-model', 'tex-man']
@@ -20,6 +22,7 @@ Vue.component 'map-editor' do
     map3d: null
     controls: null
     grid: null
+    picker: null
   computed:
     canvas: -> @$refs.canvas
     stack: -> @$refs.stack
@@ -32,6 +35,8 @@ Vue.component 'map-editor' do
     @map3d = new m3d.Map3dObj @map-model, @tex-man
     @controls = new CameraControls.OrbitalPanCameraControls @camera, @canvas
     @grid = new grid2d.MapGrid2D @map-model, @controls
+
+    @picker = new picker.Picker {@map3d, @camera, @renderer}
 
 
     @scene.add @map3d
@@ -59,6 +64,8 @@ Vue.component 'map-editor' do
 
         # next frame?
         @animate!
+    canvas-mouse-move: (e)->
+      @picker.maybe-pick e.x, e.y
 
 
 Vue.component 'context-stack' do
@@ -98,18 +105,26 @@ Vue.component 'context-stack' do
     on-key-down: (e)->
       console.log "key down: #{e.key}", e
       if e.key == 'Escape'
-        if @contexts.length > 1
-          @contexts.pop!
+        @pop-context!
       else
+        result-context = null
         thunk = ->
-        for ctx in @contexts
-          ctx = @$refs[ctx][0]
+        for context-name in @contexts
+          ctx = @$refs[context-name][0]
           console.log ctx, ctx.keymap
           if ctx.keymap? and e.key of ctx.keymap
-            thunk = ctx.keymap[e.key]
+            thunk = ctx.keymap[e.key].thunk
+            result-context = context-name
+        @pop-to result-context
         thunk!
     push-context: (context-name) ->
       @contexts.push context-name
+    pop-to: (name)->
+      while name and @contexts.length > 1 and @contexts[*-1] != name
+        @contexts.pop!
+    pop-context: ->
+        if @contexts.length > 1
+          @contexts.pop!
 
 
 Vue.component 'root-context' do
@@ -123,24 +138,31 @@ Vue.component 'root-context' do
   props: ['editor']
   computed:
     keymap: ->
-      s: ~> @sector-mode!
-      l: ~> @linedef-mode!
+      s:
+        name: 'Sector context'
+        thunk: ~> @editor.stack.push-context 'sector-context'
+      l:
+        name: 'Linedef context'
+        thunk: ~> @editor.stack.push-context 'linedef-context'
+      d:
+        name: 'Debug gun'
+        thunk: ~> @editor.stack.push-context 'debug-gun'
     style: ->
       margin: 0
       padding: "1em"
       background: "rgba(0,0,0,0.5)"
       border-radius: "0.5em"
   methods:
-    sector-mode: ->
-      console.log "Sector mode, from", @
-      @editor.stack.push-context 'sector-mode'
-    linedef-mode: ->
-      console.log "Linedef mode, from", @
-      @editor.stack.push-context 'linedef-mode'
+    sector-context: ->
+      console.log "Sector context, from", @
+      @editor.stack.push-context 'sector-context'
+    linedef-context: ->
+      console.log "Linedef context, from", @
+      @editor.stack.push-context 'linedef-context'
 
-Vue.component 'sector-mode' do
+Vue.component 'sector-context' do
   template: '''
-  <h1>Sector Mode!</h1>
+  <h1>Sector Context!</h1>
   '''
   props: ['editor']
   mounted: ->
@@ -155,9 +177,9 @@ Vue.component 'sector-mode' do
   destroyed: ->
     @editor.map3d.set-intensity!
 
-Vue.component 'linedef-mode' do
+Vue.component 'linedef-context' do
   template: '''
-  <h1>Linedef Mode!</h1>
+  <h1>Linedef Context!</h1>
   '''
   props: ['editor']
   mounted: ->
@@ -171,3 +193,26 @@ Vue.component 'linedef-mode' do
       fof-linedef: 1.0
   destroyed: ->
     @editor.map3d.set-intensity!
+
+Vue.component 'debug-gun' do
+  props: ['editor']
+  template: '''
+  <div :style='style'>
+    <picker :editor='editor' @pick='pick' />
+    <h1>DEBUG GUN</h1>
+    <ul>
+      <li>Position: {{x}}, {{y}}, {{z}}</li>
+      <li>ID: {{id}}</li>
+      <li>Type: {{type}}</li>
+    </ul>
+  </div>
+  '''
+  data: -> x: 0, y: 0, z:0, id:0, type:0
+  computed:
+    style: ->
+      margin: 0
+      padding: "1em"
+      background: "rgba(0,0,0,0.5)"
+      border-radius: "0.5em"
+  methods:
+    pick: ({@x,@y,@z, @id,@type}) ->
