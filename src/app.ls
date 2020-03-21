@@ -33,39 +33,39 @@ new Vue do
     @tex-man = new tex3d.TextureManager!
 
     # SRB2 2.2
-    #console.time '- fetch'
-    #buf <- fetch-remote-file "assets/srb2-2.2.pk3" .then
-    #console.time-end '- fetch'
-    #console.time '- pk3 parse'
-    #gfx-wad <- wad-parser.pk3-parse buf .then
-    #console.time-end '- pk3 parse'
-    #console.time '- tex ingest pk3'
-    #<- tex-man.ingest-pk3 gfx-wad .then
-    #console.time-end '- tex ingest pk3'
+    @status = "Loading SRB2: srb2-2.2.pk3..."
+    buf <~ fetch-remote-file "https://cdn.glitch.com/4653581b-1ac7-413c-8c15-b8bf8cbfcf56%2Fsrb2-2.2.pk3?v=1584718779583" .then
+    @status = "Parsing SRB2: srb2-2.2.pk3..."
+    <~ set-timeout _, 10
+    gfx-wad <~ wad-parser.pk3-parse buf .then
+    @status = "Adding textures from SRB2: srb2-2.2.pk3..."
+    <~ set-timeout _, 10
+    <~ @tex-man.ingest-pk3 gfx-wad .then
+    
 
     # SRB2Kart
-    @status = "Loading SRB2Kart: srb2.srb..."
-    buf <~ fetch-remote-file "assets/srb2kart/srb2.srb" .then
-    @status = "Parsing SRB2Kart: srb2.srb..."
-    <~ set-timeout _, 10
-    gfx-wad <~ wad-parser.wad-parse buf .then
-    @status = "Adding textures from SRB2Kart: srb2.srb..."
-    <~ set-timeout _, 10
-    <~ @tex-man.ingest-wad gfx-wad .then
-    @status = "Loading SRB2Kart: textures.kart..."
-    <~ set-timeout _, 10
-    buf <~ fetch-remote-file "assets/srb2kart/textures.kart" .then
-    @status = "Parsing SRB2Kart: textures.kart..."
-    <~ set-timeout _, 10
-    gfx-wad <~ wad-parser.wad-parse buf .then
-    @status = "Adding textures from SRB2Kart: textures.kart..."
-    <~ set-timeout _, 10
-    <~ @tex-man.ingest-wad gfx-wad .then
-    console.time-end 'pk3-parse-and-tex-ingest'
+    #@status = "Loading SRB2Kart: srb2.srb..."
+    #buf <~ fetch-remote-file "assets/srb2kart/srb2.srb" .then
+    #@status = "Parsing SRB2Kart: srb2.srb..."
+    #<~ set-timeout _, 10
+    #gfx-wad <~ wad-parser.wad-parse buf .then
+    #@status = "Adding textures from SRB2Kart: srb2.srb..."
+    #<~ set-timeout _, 10
+    #<~ @tex-man.ingest-wad gfx-wad .then
+    #@status = "Loading SRB2Kart: textures.kart..."
+    #<~ set-timeout _, 10
+    #buf <~ fetch-remote-file "assets/srb2kart/textures.kart" .then
+    #@status = "Parsing SRB2Kart: textures.kart..."
+    #<~ set-timeout _, 10
+    #gfx-wad <~ wad-parser.wad-parse buf .then
+    #@status = "Adding textures from SRB2Kart: textures.kart..."
+    #<~ set-timeout _, 10
+    #<~ @tex-man.ingest-wad gfx-wad .then
+    #console.time-end 'pk3-parse-and-tex-ingest'
 
-    MAP = "MAPAA"
+    MAP = "MAP01"
     @status = "Loading #{MAP}.wad..."
-    buf <~ fetch-remote-file "assets/#{MAP}.wad" .then
+    buf <~ fetch-remote-file "https://cdn.glitch.com/4653581b-1ac7-413c-8c15-b8bf8cbfcf56%2FMAP01.wad?v=1584718762039" .then
     @status = "Parsing #{MAP}.wad..."
     <~ set-timeout _, 10
     wad <~ wad-parser.wad-parse buf .then
