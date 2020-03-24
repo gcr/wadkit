@@ -1,5 +1,6 @@
 THREE = require 'three'
 BufferGeometryUtils = require('three-buffer-geometry-utils')(THREE)
+DynamicBufferGeometry = require './dynamic-buffer-geometry.ls'
 require! '../data/type-specifications.ls'
 
 TAGS = do
@@ -16,54 +17,65 @@ tag-geometry = (geo, id, tag) ->
   geo.set-attribute 'attrType', new THREE.Float32BufferAttribute x, 1
   geo.set-attribute 'attrId', new THREE.Float32BufferAttribute y, 1
 
+height-on-slope = (matrix, v)->
+    [Δx, Δy, _, Δoffset] = matrix.elements[2 til 15 by 4]
+    return Δx*v.x + Δy*v.y + Δoffset
 
 export class Map3dObj extends THREE.Object3D
   (@model, @tex-manager) ->
     super!
 
+    @geometry-aggregate = new DynamicBufferGeometry.BufferGeoAggregate 16, do
+      position: 3
+      uv: 2
+      texIndex: 1
+      texBounds: 4
+      attrType: 1
+      attrId: 1
+
     sectors = @model.sectors
 
     # we hold a giant buffer of uints
-    geometries = []
-    line-geometries = []
     for linedef in @model.linedefs
       #if linedef.id % 5 != 5 then continue
       #if linedef.id > 10000 then continue
       #if linedef.id < 8000 then continue
       #if linedef.id != -1 then continue
       {faces, lines} = @linedef-to-geometry linedef
-      geometries.push ...faces
-      line-geometries.push ...lines
+      @geometry-aggregate.set linedef, faces
+      #geometries.push ...faces
+      #line-geometries.push ...lines
     for sector in @model.sectors
       #console.log "generating", sector
       #sector.recalc-slope!
       {faces, lines} = @sector-to-geometry sector
-      geometries.push ...faces
-      line-geometries.push ...lines
+      @geometry-aggregate.set sector, faces
+      #geometries.push ...faces
+      #line-geometries.push ...lines
 
     # fixup geometries: we need to convert the index to a Float32 index to
     # avoid overflow!
-    for geo in geometries
-      geo.set-index new THREE.Uint32BufferAttribute(geo.index.array, 1)
+    #for geo in geometries
+    #  geo.set-index new THREE.Uint32BufferAttribute(geo.index.array, 1)
 
     console.log "have #{@model.sectors.length} sectors"
     console.log "have #{@model.linedefs.length} linedefs"
-    console.log "have #{geometries.length} geometries"
-    geo = BufferGeometryUtils.merge-buffer-geometries geometries, 0
+    #console.log "have #{geometries.length} geometries"
+    #geo = BufferGeometryUtils.merge-buffer-geometries geometries, 0
 
-    @tex-manager.fix-tex-bounds geo
-    @map-mesh = new THREE.Mesh geo, @tex-manager.get-shader-material!
+    @tex-manager.fix-tex-bounds @geometry-aggregate
+    @map-mesh = new THREE.Mesh @geometry-aggregate, @tex-manager.get-shader-material!
     @add @map-mesh
 
     # Add wireframe view
-    wire-geo = new THREE.BufferGeometry!
-    wire-geo.set-attribute 'position', new THREE.Float32BufferAttribute line-geometries,3
-    wire-mat = new THREE.LineBasicMaterial do
-        color:0xffffff
-        blending: THREE.AdditiveBlending
-        depth-write: false
-    @wireframe = new THREE.LineSegments wire-geo, wire-mat
-    @add @wireframe
+    #wire-geo = new THREE.BufferGeometry!
+    #wire-geo.set-attribute 'position', new THREE.Float32BufferAttribute line-geometries,3
+    #wire-mat = new THREE.LineBasicMaterial do
+    #    color:0xffffff
+    #    blending: THREE.AdditiveBlending
+    #    depth-write: false
+    #@wireframe = new THREE.LineSegments wire-geo, wire-mat
+    #@add @wireframe
 
   linedef-to-geometry: (linedef)->
     # Construct linedef face data!
@@ -279,6 +291,13 @@ export class Map3dObj extends THREE.Object3D
     @wireframe.material.color = new THREE.Color m,m,m
     #@wireframe.alpha = val
 
-height-on-slope = (matrix, v)->
-    [Δx, Δy, _, Δoffset] = matrix.elements[2 til 15 by 4]
-    return Δx*v.x + Δy*v.y + Δoffset
+  update-sector: (sector, new-vals)->
+    sector <<< new-vals
+    {faces, lines} = @sector-to-geometry sector
+    @geometry-aggregate.set sector, faces
+    for linedef in sector.linedefs
+      {faces, lines} = @linedef-to-geometry linedef
+      @geometry-aggregate.set linedef, faces
+    console.time 'fix-tex-bounds'
+    @tex-manager.fix-tex-bounds @geometry-aggregate
+    console.time-end 'fix-tex-bounds'

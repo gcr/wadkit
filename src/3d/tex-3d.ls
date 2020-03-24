@@ -146,7 +146,7 @@ export class TextureManager
     Promise.all @promises .then ~>
         index = geo.get-attribute 'texIndex'
         bounds = geo.get-attribute 'texBounds'
-        for i in [0 til index.count]
+        for i in [0 til geo._attr-offset or index.count]
             vTexIndex = index.array[i]
             if vTexIndex != -1
               r = @rects[vTexIndex]

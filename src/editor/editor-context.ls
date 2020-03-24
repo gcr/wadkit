@@ -209,6 +209,15 @@ Vue.component 'debug-gun' do
   '''
   data: -> x: 0, y: 0, z:0, id:0, type:0
   computed:
+    keymap: ->
+      h:
+        name: "Putz with height"
+        thunk: ~>
+          if @type == 2
+            sector = @editor.map-model.sectors[@id]
+            console.log "Sector:", sector
+            @editor.map3d.update-sector sector, floor-height: sector.floor-height+16
+            console.log "Sector:", sector
     style: ->
       margin: 0
       padding: "1em"
