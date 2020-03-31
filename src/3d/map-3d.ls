@@ -127,10 +127,11 @@ export class Map3dObj extends THREE.Object3D
       xoffs = sidedef.tex-x-offset
       yoffs = sidedef.tex-y-offset
       if mode == 'lower' and considered-linedef.flags.lower-unpegged
+        # draw bottom of texture on floor
         yoffs += -(ha2 - ha1)
       else if mode == 'upper' and not considered-linedef.flags.upper-unpegged
         yoffs += -(ha2 - ha1)
-      else if mode == 'middle'
+      else if mode == 'middle' and considered-linedef.flags.lower-unpegged
         yoffs += -(ha2 - ha1)
       geo.set-attribute 'uv', new THREE.Float32BufferAttribute([
           0 + xoffs,    (ha2 - ha1) + yoffs
