@@ -1,5 +1,8 @@
 THREE = require 'three'
 
+# References:
+# - Unofficial Doom Specification 1.666
+
 export class MapModel
   # A class that encapsulates:
   # - Link de-indexing

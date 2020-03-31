@@ -1,4 +1,5 @@
 THREE = require 'three'
+DymanicBufferGeometry = require '../3d/dynamic-buffer-geometry.ls'
 
 grid-material = ({color, smooth-start, smooth-end, depth-test})->
   new THREE.ShaderMaterial do
@@ -46,12 +47,12 @@ export class MapGrid2D extends THREE.Object3D
       smooth-end: 256.0
       depth-test: false
     @add @lines
-    @lines-front = new THREE.LineSegments line-geo, grid-material do
-      color: new THREE.Vector3 1.0,1.0,1.0
-      smooth-start: 8192.0
-      smooth-end: 256.0
-      depth-test: true
-    @add @lines-front
+    #@lines-front = new THREE.LineSegments line-geo, grid-material do
+    #  color: new THREE.Vector3 1.0,1.0,1.0
+    #  smooth-start: 8192.0
+    #  smooth-end: 256.0
+    #  depth-test: true
+    #@add @lines-front
 
     # Add grid
     x = -32768
@@ -68,29 +69,29 @@ export class MapGrid2D extends THREE.Object3D
     #  color: 0x222222ff
     #  depth-test: false
     #  blending: THREE.AdditiveBlending
+    #@grid = new THREE.LineSegments @grid-geo, grid-material do
+    #  color: new THREE.Vector3 0.3,0.3,0.3
+    #  smooth-start: 2048.0
+    #  smooth-end: 256.0
+    #  depth-test: true
+    #@add @grid
     @grid = new THREE.LineSegments @grid-geo, grid-material do
       color: new THREE.Vector3 0.3,0.3,0.3
       smooth-start: 2048.0
       smooth-end: 256.0
-      depth-test: true
-    @add @grid
-    @grid-front = new THREE.LineSegments @grid-geo, grid-material do
-      color: new THREE.Vector3 0.1,0.1,0.1
-      smooth-start: 2048.0
-      smooth-end: 256.0
       depth-test: false
-    @add @grid-front
+    @add @grid
 
 
   set-intensity: (val) ->
     #@grid.material.uniforms.color.value = new THREE.Vector3 0.3*val,0.3*val,0.3*val
     #@grid-front.material.uniforms.color.value = new THREE.Vector3 0.1*val,0.1*val,0.1*val
-    @lines-front.material.uniforms.color.value = new THREE.Vector3 val,val,val
+    #@lines-front.material.uniforms.color.value = new THREE.Vector3 val,val,val
     @lines.material.uniforms.color.value = new THREE.Vector3 val,val,val
 
 
   update: ->
     @position.setZ @controls.target.z
-    for x in [@grid, @lines-front, @grid-front, @lines]
+    for x in [@lines, @grid]
       x.material.uniforms.target.value = @controls.target.clone!.multiplyScalar 100
     #@grid-mat.uniforms-

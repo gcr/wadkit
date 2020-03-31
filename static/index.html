@@ -2,22 +2,94 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>My first three.js app</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Kartography WAD editor</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/3.0.3/normalize.css">
+    <link href="miligram.css" rel="stylesheet" type="text/css">
     <style>
       html,
       body {
         margin: 0;
         height: 100%;
-        background-color: #000;
         touch-action: none;
-        color: #fff;
       }
       canvas,
       .fullsize {
-        display: block;
+        display: flex;
         width: 100%;
         height: 100%;
       }
+
+     /* Context stack */
+     nav {
+       position: absolute;
+       display: flex;
+       flex-flow: row nowrap;
+       align-items: start;
+       margin: 1em;
+     }
+     .editor-panel {
+       margin: 0;
+       padding: 1em;
+       background: #fff;
+       border: solid 4px #adf;
+       border-radius: 0.7em;
+       box-shadow: 4px 4px 0 0 #adf;
+     }
+     .editor-panel ul, ul.editor-panel {
+       list-style: none;
+     }
+     .editor-panel li {
+       margin: 0;
+       padding: 0.1em 1em;
+       border: solid 2px #fcd;
+       box-shadow: 4px 4px 0 0 #fcd;
+       border-radius: 0.5em;
+       margin-top: -2px;
+       background-color: #fff8f8;
+     }
+     .editor-panel li > label {
+       display: inline-block;
+       width: 10em;
+     }
+     .editor-panel li > label.narrow {
+       width: auto;
+     }
+
+     label > i {
+       background-color: #fcd;
+       border-top: solid 0px #fcd;
+       border-bottom: solid 2px #fcd;
+       border-left: solid 6px #fcd;
+       border-right: solid 6px #fcd;
+       margin: 0 -6px;
+       border-radius: 8px;
+       color: #ad346c;
+     }
+
+     progress[value] {
+       -webkit-appearance: none;
+       display: block;
+       height: 1em;
+       margin: 1em auto 0 auto;
+     }
+     progress[value]::-webkit-progress-bar {
+       background-color: #fff;
+       border-radius: 8px;
+       border: solid 4px #fcd;
+       height: 1em;
+     }
+     progress[value]::-webkit-progress-value {
+       background-color: #fcd;
+     }
+
+
+
+
+     /* fcd, adf, fff */
+
+
     </style>
   </head>
   <body>

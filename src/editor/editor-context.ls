@@ -76,7 +76,7 @@ Vue.component 'context-stack' do
   # - a list of widgets, which themselves may be
   #   components;
   template: '''
-  <nav :style='style'>
+  <nav>
     <component v-for="ctx in contexts"
                  :is="ctx"
                  :editor='editor'
@@ -87,12 +87,6 @@ Vue.component 'context-stack' do
   props: ['editor', 'keyRef']
   computed:
     element: -> @$parent.$refs[@keyRef]
-    style: ->
-      position: "absolute"
-      display: "flex"
-      flex-flow: "row nowrap"
-      align-items: "start"
-      margin: "1em"
 
   data: -> do
     contexts: ['root-context']
@@ -129,10 +123,10 @@ Vue.component 'context-stack' do
 
 Vue.component 'root-context' do
   template: '''
-    <ul :style='style'>
-    ROOT CONTEXT
-    <br>
-    <div>Foobar?</div>
+    <ul class='editor-panel'>
+      <li><label class='narrow'><i>S</i>ector</label></li>
+      <li><label class='narrow'><i>L</i>inedef</label></li>
+      <li><label class='narrow'><i>D</i>ebug</label></li>
     </ul>
   '''
   props: ['editor']
@@ -147,11 +141,6 @@ Vue.component 'root-context' do
       d:
         name: 'Debug gun'
         thunk: ~> @editor.stack.push-context 'debug-gun'
-    style: ->
-      margin: 0
-      padding: "1em"
-      background: "rgba(0,0,0,0.5)"
-      border-radius: "0.5em"
   methods:
     sector-context: ->
       console.log "Sector context, from", @
@@ -197,18 +186,34 @@ Vue.component 'linedef-context' do
 Vue.component 'debug-gun' do
   props: ['editor']
   template: '''
-  <div :style='style'>
+  <div class='editor-panel'>
     <picker :editor='editor' @pick='pick' />
     <h1>DEBUG GUN</h1>
     <ul>
-      <li>Position: {{x}}, {{y}}, {{z}}</li>
-      <li>ID: {{id}}</li>
-      <li>Type: {{type}}</li>
+      <li><label>Position:</label> {{Math.floor(x)}}, {{Math.floor(y)}}, {{Math.floor(z)}}</li>
+      <li><label>ID:</label> {{id}}</li>
+      <li><label>Type:</label> {{type}}</li>
+      <li v-if="isLinedef">
+        <label>Front textures:</label><br />
+        {{linedef.frontSidedef.lowerTex}},
+        {{linedef.frontSidedef.middleTex}},
+        {{linedef.frontSidedef.upperTex}}
+      </li>
+      <li v-if="isLinedef && linedef.backSidedef">
+        <label>Back textures:</label><br />
+        {{linedef.backSidedef.lowerTex}},
+        {{linedef.backSidedef.middleTex}},
+        {{linedef.backSidedef.upperTex}}
+      </li>
     </ul>
   </div>
   '''
   data: -> x: 0, y: 0, z:0, id:0, type:0
   computed:
+    is-sector: -> @type in [2,4]
+    is-linedef: -> @type in [1]
+    sector: -> @editor.map-model.sectors[@id]
+    linedef: -> @editor.map-model.linedefs[@id]
     keymap: ->
       h:
         name: "Putz with height"
@@ -218,10 +223,5 @@ Vue.component 'debug-gun' do
             console.log "Sector:", sector
             @editor.map3d.update-sector sector, floor-height: sector.floor-height+16
             console.log "Sector:", sector
-    style: ->
-      margin: 0
-      padding: "1em"
-      background: "rgba(0,0,0,0.5)"
-      border-radius: "0.5em"
   methods:
     pick: ({@x,@y,@z, @id,@type}) ->
