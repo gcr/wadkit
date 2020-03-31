@@ -59,7 +59,23 @@ export WAD-SPEC = (data) ->
   LINEDEFrecord:
     v-begin: 'int16'
     v-end: 'int16'
-    flags: 'uint16'
+    flags: ->
+      f = @parse 'uint16'
+      return do
+        impassible:     f .&. 1
+        block-monsters: f .&. 2
+        two-sided:      f .&. 4
+        upper-unpegged: f .&. 8
+        lower-unpegged: f .&. 16
+        no-easy:        f .&. 32
+        no-climb:       f .&. 64
+        no-normal:      f .&. 128
+        no-hard:        f .&. 256
+        passuse:        f .&. 512
+        no-sonic:       f .&. 2048
+        no-tails:       f .&. 4096
+        no-knux:        f .&. 8192
+        bouncy:         f .&. 16384
     # impassible: 1
     # block-monsters: 1
     # two-sided: 1

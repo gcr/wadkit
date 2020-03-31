@@ -32,36 +32,24 @@ export class Map3dObj extends THREE.Object3D
       texBounds: 4
       attrType: 1
       attrId: 1
+    #@lines-aggregate = new DynamicBufferGeometry.BufferGeoAggregate 8, do
+    #  position: 3
 
     sectors = @model.sectors
 
     # we hold a giant buffer of uints
     for linedef in @model.linedefs
-      #if linedef.id % 5 != 5 then continue
-      #if linedef.id > 10000 then continue
-      #if linedef.id < 8000 then continue
-      #if linedef.id != -1 then continue
       {faces, lines} = @linedef-to-geometry linedef
       @geometry-aggregate.set linedef, faces
-      #geometries.push ...faces
-      #line-geometries.push ...lines
+      #@lines-aggregate.set linedef, lines
     for sector in @model.sectors
-      #console.log "generating", sector
-      #sector.recalc-slope!
       {faces, lines} = @sector-to-geometry sector
       @geometry-aggregate.set sector, faces
-      #geometries.push ...faces
-      #line-geometries.push ...lines
-
-    # fixup geometries: we need to convert the index to a Float32 index to
-    # avoid overflow!
-    #for geo in geometries
-    #  geo.set-index new THREE.Uint32BufferAttribute(geo.index.array, 1)
+      #@lines-aggregate.set linedef, lines
 
     console.log "have #{@model.sectors.length} sectors"
     console.log "have #{@model.linedefs.length} linedefs"
     #console.log "have #{geometries.length} geometries"
-    #geo = BufferGeometryUtils.merge-buffer-geometries geometries, 0
 
     @tex-manager.fix-tex-bounds @geometry-aggregate
     @map-mesh = new THREE.Mesh @geometry-aggregate, @tex-manager.get-shader-material!
@@ -74,7 +62,7 @@ export class Map3dObj extends THREE.Object3D
     #    color:0xffffff
     #    blending: THREE.AdditiveBlending
     #    depth-write: false
-    #@wireframe = new THREE.LineSegments wire-geo, wire-mat
+    #@wireframe = new THREE.LineSegments @lines-aggregate, wire-mat
     #@add @wireframe
 
   linedef-to-geometry: (linedef)->
@@ -82,13 +70,14 @@ export class Map3dObj extends THREE.Object3D
     {front-sidedef: front, back-sidedef: back, v-begin, v-end} = linedef
     faces = []
     lines = []
-    add-quad = (va, vb, z1, z2, sidedef, mode='lower', geo-type)~>
+    add-quad = (va, vb, z1, z2, sidedef, mode='lower', geo-type, control-linedef)~>
+      considered-linedef = linedef or control-linedef
       if not sidedef?.sector then return
       # add faces in CCW order:
-      #    1----3     uv: top (=ha2-ha1)
+      #    1----3     uv: top (=0, since tex origin is top)
       #    | \  |
       #    |  \ |
-      #    0----2     uv: bottom (=0)
+      #    0----2     uv: bottom (=ha2-ha1)
 
       ha1 = hb1 = z1
       ha2 = hb2 = z2
@@ -137,15 +126,17 @@ export class Map3dObj extends THREE.Object3D
       dist = Math.sqrt(dx*dx + dy*dy)
       xoffs = sidedef.tex-x-offset
       yoffs = sidedef.tex-y-offset
-      uv-top = 0
-      uv-bottom = 0
-      uv-left = 0
-      uv-right = 0
+      if mode == 'lower' and considered-linedef.flags.lower-unpegged
+        yoffs += -(ha2 - ha1)
+      else if mode == 'upper' and not considered-linedef.flags.upper-unpegged
+        yoffs += -(ha2 - ha1)
+      else if mode == 'middle'
+        yoffs += -(ha2 - ha1)
       geo.set-attribute 'uv', new THREE.Float32BufferAttribute([
-          0 + xoffs,    ha2 + yoffs
-          0 + xoffs,    ha1 + yoffs
-          dist + xoffs, hb2 + yoffs
-          dist + xoffs, hb1 + yoffs
+          0 + xoffs,    (ha2 - ha1) + yoffs
+          0 + xoffs,    0 + yoffs
+          dist + xoffs, (hb2 - hb1) + yoffs
+          dist + xoffs, 0 + yoffs
       ],2)
       # note that our UVs have origin in bottom
       # left of the texture and units are texels
@@ -155,7 +146,7 @@ export class Map3dObj extends THREE.Object3D
         material, material, material, material
       ],1)
       geo.set-attribute 'texBounds', new THREE.Float32BufferAttribute [0 for [0 til 4*4]],4
-      tag-geometry geo, linedef.id, geo-type
+      tag-geometry geo, considered-linedef.id, geo-type
       faces.push geo
       # Add vertices to lines
       lines.push va.x,va.y,ha1, va.x,va.y,ha2
@@ -200,7 +191,7 @@ export class Map3dObj extends THREE.Object3D
             h1 = control-sector.floor-height
             h2 = control-sector.ceiling-height
             sidedef = control-linedef.front-sidedef
-            add-quad v-end, v-begin, h1, h2, sidedef, 'middle', TAGS.is-fof-linedef
+            add-quad v-end, v-begin, h1, h2, sidedef, 'middle', TAGS.is-fof-linedef, control-linedef
       # FOFs on sector on the back side
       for control-linedef in back?.sector?.tagged-linedefs or []
         if type-specifications.fof-linedef-type control-linedef
@@ -210,7 +201,7 @@ export class Map3dObj extends THREE.Object3D
             h1 = control-sector.floor-height
             h2 = control-sector.ceiling-height
             sidedef = control-linedef.front-sidedef
-            add-quad v-begin, v-end, h1, h2, sidedef, 'middle', TAGS.is-fof-linedef
+            add-quad v-begin, v-end, h1, h2, sidedef, 'middle', TAGS.is-fof-linedef, control-linedef
 
     return {faces, lines}
 
@@ -295,9 +286,27 @@ export class Map3dObj extends THREE.Object3D
     sector <<< new-vals
     {faces, lines} = @sector-to-geometry sector
     @geometry-aggregate.set sector, faces
+    #@lines-aggregate.set linedef, lines
+    sector.recalc-slope!
     for linedef in sector.linedefs
       {faces, lines} = @linedef-to-geometry linedef
       @geometry-aggregate.set linedef, faces
+      if linedef.front-sidedef?.sector?
+        linedef.front-sidedef.sector.recalc-slope!
+        {faces, lines} = @sector-to-geometry linedef.front-sidedef.sector
+        @geometry-aggregate.set linedef.front-sidedef.sector, faces
+        for ll in linedef.front-sidedef.sector.linedefs
+          {faces, lines} = @linedef-to-geometry ll
+          @geometry-aggregate.set ll, faces
+      if linedef.back-sidedef?.sector?
+        linedef.back-sidedef.sector.recalc-slope!
+        {faces, lines} = @sector-to-geometry linedef.back-sidedef.sector
+        @geometry-aggregate.set linedef.back-sidedef.sector, faces
+        for ll in linedef.back-sidedef.sector.linedefs
+          {faces, lines} = @linedef-to-geometry ll
+          @geometry-aggregate.set ll, faces
+
+      #@lines-aggregate.set linedef, lines
     console.time 'fix-tex-bounds'
     @tex-manager.fix-tex-bounds @geometry-aggregate
     console.time-end 'fix-tex-bounds'
