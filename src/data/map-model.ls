@@ -96,7 +96,8 @@ slope-from-vertices = (a,b,c)->
   # ...huh, it's interesting to me that this is similar
   # to the ∧ operation from https://marctenbosch.com/quaternions/
   # it looks like Δx and Δy is the division
-  # of two bivectors.
+  # of two bivectors. i'm to tired to understand what that
+  # actually means tho. someone explain it to me!!!
 
   m = new THREE.Matrix4!.set(
     1,   0,   0, 0,
