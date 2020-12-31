@@ -48,24 +48,6 @@ export class MapModel
     # Slopes
     for @sectors then ..recalc-slope!
 
-
-#    # Make vertex geometry
-#    vertices = []
-#    lines = []
-#    for v in @vertexes
-#      SCALE = 0.001
-#      vertices.push(v.x * SCALE, v.y * SCALE, 0.0)
-#    for l in @linedefs
-#      lines.push(l.v-begin, l.v-end)
-#
-#    @material = new THREE.LineBasicMaterial color: 0xffffff, linewidth: 5
-#    @geometry = new THREE.BufferGeometry!
-#      ..setAttribute 'position', new THREE.Float32BufferAttribute(vertices, 3)
-#      ..setIndex lines
-#      ..computeBoundingSphere!
-#
-#    @obj = new THREE.LineSegments @geometry, @material
-
 slope-from-vertices = (a,b,c)->
   a = a.clone!
   b = b.clone!
@@ -109,11 +91,7 @@ slope-from-vertices = (a,b,c)->
 export class Vertex
   (@model, {@x, @y}) ->
     @id = null
-
   linedefs:~ -> @model._vertex-to-linedefs[@id] or []
-
-  # returns list of [linedef, vertex]
-  neighbors: -> [[l, l.other-v @] for l in @linedefs]
 
 export class Linedef
   (@model, {v-begin: @_v-begin-id, v-end: @_v-end-id, @flags, @action, @tag, front-sidedef: @_front-sidedef-id, back-sidedef: @_back-sidedef-id}) ->
