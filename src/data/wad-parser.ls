@@ -2,7 +2,7 @@ require! 'jParser'
 require! 'jszip'
 require! 'path'
 
-export WAD-SPEC = (data) ->
+export WAD-SPEC = (overall-buffer) ->
   # fixed-length 8 byte string padded with \x00, which we discard ;)
   string8: -> @parse ['string', 8] .replace /\0+$/g, ''
 
@@ -29,11 +29,7 @@ export WAD-SPEC = (data) ->
      name: 'string8'
      data: ->
        c = @current
-       # data is a buffer
-       if c.name in ['THINGS', 'LINEDEFS', 'VERTEXES', 'SECTORS', 'SIDEDEFS', 'PLAYPAL']
-         @seek c.offset, -> @parse [c.name, c.size]
-       else
-         data.slice c.offset, c.offset+c.size
+       overall-buffer.slice c.offset, c.offset+c.size
 
   # special-purpose lump specifications
 
@@ -146,10 +142,12 @@ export WAD-SPEC = (data) ->
               data[(row + i)*@current.width  + col] = x
       return data
 
+export parse-to-spec = (buffer, spec-type) ->
+  new jParser(buffer, WAD-SPEC buffer).parse([spec-type, buffer.length])
+
 # wad-parse :: Buffer -> Promise of JSON array
-export wad-parse = (data) ->
-  new Promise (resolve, reject) ->
-    return resolve(new jParser(data, WAD-SPEC(data)).parse 'file')
+export wad-parse = (data) ->>
+  parse-to-spec data, 'file'
 
 # pk3-parse :: Buffer -> Promise of {filename: buffer}
 # A pk3 file is a renamed zip file, so we use jszip
@@ -178,26 +176,28 @@ export wad-read-map = (wad, mapname)-> new Promise (resolve, reject) ->
     # They are:
     # THINGS, LINEDEFS, SIDEDEFS, VERTEXES, SEGS, SSECTORS,
     # NODES, SECTORS, REJECT, BLOCKMAP
-    if wad.lumps[i].name == mapname
+    lump = wad.lumps[i]
+    next = -> lump := wad.lumps[++i]
+    if lump.name == mapname
       mapcrap = ['THINGS', 'LINEDEFS', 'SIDEDEFS', 'VERTEXES', 'SEGS',
                  'SECTORS', 'NODES', 'SSECTORS', 'REJECT']
       # these are the only ones we care about ;)
-      required = ["SECTORS", "VERTEXES", "THINGS", "LINEDEFS", "SIDEDEFS"]
-      map = {}
-      i += 1
-      while i < wad.lumps.length and wad.lumps[i].name in mapcrap
-        if wad.lumps[i].name in required
-          if wad.lumps[i].name.to-lower-case! of map
-            return reject "Map #mapname has multiple lumps named '#{wad.lumps[i].name}'"
-          map[wad.lumps[i].name.to-lower-case!] = wad.lumps[i].data
-        i++
+      data = {-sectors, -vertexes, -things, -linedefs, -sidedefs}
+      while next! and lump.name in mapcrap
+        if data[lump.name.to-lower-case!]
+            return reject "Map #mapname has multiple lumps named '#{lump.name}'"
+        if lump.name.to-lower-case! of data
+          data[lump.name.to-lower-case!] = parse-to-spec lump.data, lump.name
       # cool, double check everything
-      for lumpname in required
-        if lumpname.to-lower-case! not of map
-          return reject "Map does not have required lump: '#lumpname'"
-
-      return resolve map
+      for lumpname,v of data
+        if v is false
+          return reject "Map does not have required lump: '#{lumpname.to-upper-case!}'"
+      return resolve data
   return reject "Map #mapname does not exist"
+
+export wad-list-maps = (wad) ->
+  for {name} in wad.lumps
+    name if name == /^MAP..$/
 
 export pk3-read-map = (zip, mapname)-> new Promise (resolve, reject)->
   for pathname, file of zip
@@ -207,8 +207,7 @@ export pk3-read-map = (zip, mapname)-> new Promise (resolve, reject)->
         return resolve wad-read-map wad, mapname
   reject "Map #mapname not found"
 
-export patch-to-image-data = (data, palette) ->
-    lump = new jParser(data, WAD-SPEC(data)).parse 'PICTURE'
+export patch-to-image-data = (lump, palette) ->
     image-data = new ImageData lump.width, lump.height
     for x,i in lump.data
       if x != 255
@@ -217,7 +216,8 @@ export patch-to-image-data = (data, palette) ->
         image-data.data[4*i + 2] = palette.data[3*x + 2]
         image-data.data[4*i + 3] = 255
     return image-data
-export flat-to-image-data = (data, palette) ->
+export flat-to-image-data = (lump, palette) ->
+    data = lump.data
     sz = Math.sqrt(data.length)
     image-data = new ImageData sz,sz
     for x,i in data
@@ -227,6 +227,44 @@ export flat-to-image-data = (data, palette) ->
         image-data.data[4*i + 2] = palette.data[3*x + 2]
         image-data.data[4*i + 3] = 255
     return image-data
+
+export wad-list-gfx = (wad) ->
+    flats = {}
+    textures = {}
+    patches = {}
+    all-gfx = {}
+    state = null
+    for let lump in wad.lumps
+      # End textures
+      if lump.name == 'TX_END'
+        state := null
+      if lump.name == 'F_END'
+        state := null
+      if lump.name == 'P_END'
+        state := null
+
+      # Next texture lump
+      if state == 'texture'
+        textures[lump.name] = -> parse-to-spec lump.data, 'PICTURE'
+        all-gfx[lump.name] = textures[lump.name]
+      if state == 'patch'
+        patches[lump.name] = -> parse-to-spec lump.data, 'PICTURE'
+        all-gfx[lump.name] = patches[lump.name]
+      # Next flat lump
+      if state == 'flat'
+        flats[lump.name] = -> lump.data
+        all-gfx[lump.name] = flats[lump.name]
+
+      # Start parsing textures
+      if lump.name == 'TX_START'
+        state := 'texture'
+      # Start parsing flats
+      if lump.name == 'F_START'
+        state := 'flat'
+      # Start parsing patches
+      if lump.name == 'P_START'
+        state := 'patch'
+    return {textures, flats, patches, all-gfx}
 
 #require! 'fs'
 #err, data <- fs.read-file '/Users/kimmy/srb2kart/DOWNLOAD/KL_InfiniteLaps-v1.wad'

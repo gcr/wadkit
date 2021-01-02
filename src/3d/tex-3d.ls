@@ -1,4 +1,4 @@
-window.THREE = require 'three'
+global.THREE = require 'three'
 
 require! 'path'
 
@@ -36,6 +36,7 @@ export class TextureManager
 
     state = null
     for let lump in wad.lumps
+      throw new Error "Depcretade! Use the wad-parsing functions."
       # End textures
       if lump.name == 'TX_END'
         state := null

@@ -3,6 +3,11 @@ THREE = require 'three'
 # References:
 # - Unofficial Doom Specification 1.666
 
+WARNINGS = []
+warn = (msg) ->
+  WARNINGS.push msg
+  if false then console.error msg
+
 export class MapModel
   # A class that encapsulates:
   # - Link de-indexing
@@ -10,7 +15,7 @@ export class MapModel
   #   propogate to interested parties
   # - A standard API to mutate this state
 
-  (@wad, {sectors, things, linedefs, sidedefs, vertexes}) ->
+  ({sectors, things, linedefs, sidedefs, vertexes}) ->
     @vertexes = [ new Vertex @, .. for vertexes ]
     @linedefs = [ new Linedef @, .. for linedefs ]
     @sectors  = [ new Sector @, .. for sectors ]
@@ -180,7 +185,7 @@ export class Sector
         cycles.push that
         for that then interesting-linedefs.delete ..
     if interesting-linedefs.size > 0
-      console.error "Unclosed linedefs in sector:", interesting-linedefs, @
+      warn "Unclosed linedefs in sector:", interesting-linedefs, @
       return {boundary-cycles: [], hole-cycles: []}
 
     # Which cycles delimit sector boundaries and which
@@ -234,7 +239,7 @@ export class Sector
 
   recalc-slope: ->
     if @_recursion_loop
-      console.error "Sector #{@id} slope copies from itself in a cycle", @
+      warn "Sector #{@id} slope copies from itself in a cycle"
       return
     farthest-vertex-from = (a,b)~>
       # Which vertex is farthest from line a-b?
@@ -264,7 +269,7 @@ export class Sector
 
       # Slope copy for floors
       if line.front-sidedef?.sector is @ and line.action in [720, 722]
-        console.log "Copy floor slope"
+        #console.log "Copy floor slope"
         for s in line.tagged-sectors
           if s is @ then continue
           try
@@ -300,7 +305,7 @@ export class Sector
       b = reference-floor-line.v-end
       far-v = farthest-vertex-from a,b
       if not far-v
-        console.error "Could not calculate floor slope for sector #{@id}: no farthest vertex"
+        warn "Could not calculate floor slope for sector #{@id}: no farthest vertex"
         return
       # Calculate three vertices
       v0 = new THREE.Vector3(far-v.x, far-v.y, @floor-height)
@@ -313,7 +318,7 @@ export class Sector
       b = reference-ceiling-line.v-end
       far-v = farthest-vertex-from a,b
       if not far-v
-        console.error "Could not calculate ceiling slope for sector #{@id}: no farthest vertex"
+        warn "Could not calculate ceiling slope for sector #{@id}: no farthest vertex"
         return
       # Calculate three vertices
       v0 = new THREE.Vector3(far-v.x, far-v.y, @ceiling-height)
