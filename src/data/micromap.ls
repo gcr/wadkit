@@ -147,8 +147,8 @@ tex-wad <- wad-parse tex-wad-buf .then
 downsample-tex = (t, xscale=1, yscale=1)->
   {height, width, data} = t
   buf = new Uint8Array(Math.floor(height/xscale) * Math.floor(width/yscale))
-  for row from 1 til height
-    for col from 1 til width
+  for row from 0 til height
+    for col from 0 til width
       if row % yscale == 0 and col % xscale == 0
         buf[col/yscale + row/xscale*width] = t.data[col + row*width]
   t.data = buf
