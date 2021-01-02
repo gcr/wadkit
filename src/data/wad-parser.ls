@@ -146,8 +146,13 @@ export parse-to-spec = (buffer, spec-type) ->
   new jParser(buffer, WAD-SPEC buffer).parse([spec-type, buffer.length])
 
 # wad-parse :: Buffer -> Promise of JSON array
-export wad-parse = (data) ->>
-  parse-to-spec data, 'file'
+export wad-parse = (data, fn) ->> do
+    try
+        parse-to-spec data, 'file'
+    catch
+        console.log "⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️⚠️"
+        console.log "failed to parse wad file: `#{fn}`. Does it exist?"
+        throw e
 
 # pk3-parse :: Buffer -> Promise of {filename: buffer}
 # A pk3 file is a renamed zip file, so we use jszip

@@ -16,7 +16,8 @@
   "license": "MIT",
   "dependencies": {
     "bootstrap-vue": "^2.6.1",
-    "jParser": "^1.0.2",
+    "jDataView": "2.3.0",
+    "jParser": "1.0.2",
     "jszip": "^3.2.2",
     "livescript": "^1.6.0",
     "lzma-native": "^6.0.1",

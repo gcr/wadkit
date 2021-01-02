@@ -127,17 +127,24 @@ progress = require 'progress'
 {wad-parse, picture-parse, wad-list-maps, wad-read-map, wad-list-gfx} = require './wad-parser.ls'
 {MapModel} = require './map-model.ls'
 
-err, map-wad-buf <- fs.read-file '/Users/kimmy/srb2kart/maps.kart'
-err, tex-wad-buf <- fs.read-file '/Users/kimmy/srb2kart/textures.kart'
 
-wad <- wad-parse map-wad-buf .then
+
+
+maps_filename = '/Applications/onic Robo Blast 2 Kart.app/Contents/Resources/maps.kart'
+textures_filename = '/Applications/Sonic Robo Blast 2 Kart.app/Contents/Resources/textures.kart'
+err, map-wad-buf <- fs.read-file maps_filename
+err, tex-wad-buf <- fs.read-file textures_filename
+
+wad <- do
+    wad-parse map-wad-buf, maps_filename
+.then
 maps = do ->>
-  console.log "Loading maps..."
-  maps = wad-list-maps wad
-  bar = new progress 'Map :name :current/:total, :percent, eta :eta s', total: maps.length
-  for mapname in maps
-    bar.tick name: mapname
-    new MapModel await wad-read-map wad, mapname
+      console.log "Loading maps..."
+      maps = wad-list-maps wad
+      bar = new progress 'Map :name :current/:total, :percent, eta :eta s', total: maps.length
+      for mapname in maps
+        bar.tick name: mapname
+        new MapModel await wad-read-map wad, mapname
 maps <- maps.then
 
 console.log "Loading textures..."
